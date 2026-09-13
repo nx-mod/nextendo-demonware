@@ -40,6 +40,24 @@ IsSamePresenceGroupApplication). The D3 server only answers the Demonware side:
 Nintendo device-account ID, Citron friends by Nextendo PID. Verified both ways
 (console → xp0sed, Citron → su6ur6an). Do not rewrite presence in local proxies.
 
+**Presence, the Nextendo way (2026-09-13).** Nextendo game servers report who is
+online to nextendo-account: `POST /internal/presence-batch {appId, status:2, pids}`
+every 30 s with `X-Internal-Key` (TTL 90 s). nextendo-account hands it to
+**nx-account**, which builds the console's BaaS friend objects ("online / playing").
+d3-lobby now does the same with the players' Nextendo PIDs (presence.go).
+Limits: nx-account is **private** (not in the NextendoNetwork org); the console's
+friend list and account-link page come from the real Nextendo, whose presence
+intake is internal — so a locally hosted D3 server's presence only reaches devices
+that read the same nextendo-account. Local accounts also use local PIDs
+(1800000001…), not the real Nextendo PIDs.
+
+**Web pieces.** Local nextendo-account already implements every `/api/*` endpoint
+of NextendoNetwork/nextendo-site (incl. OAuth authorize/token/userinfo). It serves
+the website when `NEXTENDO_STATIC` points at the site files; ours points at
+`nextendo/web` (registration page only). Pointing it at a nextendo-site checkout
+gives login, account/friends, sessions, status, downloads, verify/forgot/reset
+locally (PolyForm Shield license allows self-hosting).
+
 **Confirmed 2026-09-13 04:37:** console (d3hack, online-safe config in
 `d3hack-online-safe.toml`) hosted; Citron (stock 2.7.7) quick-matched in via the
 NAT introduction relay; host reported 2/4 and the session held. Community buffs
