@@ -175,6 +175,14 @@ func (l *lobbyConn) onTask(payload []byte) {
 		reply = taskReply(task, 0, func(w *bdWriter) uint32 { w.blobv(data); return 1 })
 		l.logf("tache bdStorage.getPublisherFile ctx=%q file=%q -> %s (%d octets)", ctx, name, path, len(data))
 
+	case service == svcTitleUtilities && task == 9:
+		reply = l.onGetUserNames(task, r)
+
+	case service == 29 && (task == 1 || task == 4):
+		if reply = l.onUserData(task, r); reply == nil {
+			reply = taskReply(task, 0, nil)
+		}
+
 	case service == svcMatchMaking:
 		if reply = l.onMatchMaking(task, r); reply == nil {
 			reply = taskReply(task, 0, nil)

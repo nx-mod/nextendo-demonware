@@ -182,6 +182,14 @@ func main() {
 			if err := os.WriteFile(filepath.Join(sessionsDir, name), clientTicket, 0o644); err != nil {
 				log.Printf("     [session] %v", err)
 			}
+			// Identite du joueur pour le lobby (amis en ligne) : surnom Nintendo et
+			// PID Nextendo, retrouves par les 8 octets de cle de session.
+			id := playerIdentity(body)
+			if raw, err := json.Marshal(id); err == nil {
+				idName := fmt.Sprintf("id_%x.json", clientTicket[33:41])
+				_ = os.WriteFile(filepath.Join(sessionsDir, idName), raw, 0o644)
+				log.Printf("     [session] joueur %q pid=%d", id.Username, id.PID)
+			}
 		}
 
 		ivSeed := req.IVSeed

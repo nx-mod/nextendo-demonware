@@ -81,6 +81,7 @@ type lobbyConn struct {
 	payload1 []byte // charge du 0x81 envoye, pour le transcript
 
 	keys    *sessionKeys
+	player  *playerID
 	s2cSeq  uint32
 	msgSeen int
 }
@@ -131,6 +132,7 @@ func (l *lobbyConn) dump(tag string, b []byte) {
 func (l *lobbyConn) run() {
 	defer l.c.Close()
 	defer dropSessionsOf(l.n)
+	defer dropOnline(l.n)
 	l.logf("==== CONNECT from=%s", l.c.RemoteAddr())
 
 	hello, err := l.readFull(helloLen)
@@ -229,6 +231,9 @@ func (l *lobbyConn) onClientAuth(raw []byte) bool {
 			if bytes.Equal(k.clientTag[:], tag) {
 				l.keys = &k
 				l.logf("0x82 AUTHENTIFIE — cle=%s rsa=%v", cand.name, wrapped)
+				if tk := findTicket(raw); tk != nil {
+					l.loadIdentity(tk)
+				}
 				if err := l.send(frame(append([]byte{msgServerOK}, k.serverChk[:]...))); err != nil {
 					l.logf("envoi 0x83: %v", err)
 					return false
