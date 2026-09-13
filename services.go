@@ -56,9 +56,15 @@ var transactions atomic.Uint64
 // bdWriter ecrit un bdByteBuffer type.
 type bdWriter struct{ b []byte }
 
-func (w *bdWriter) u8(v byte)    { w.b = append(w.b, tagU8, v) }
-func (w *bdWriter) u32(v uint32) { w.b = append(w.b, tagU32); w.b = binary.LittleEndian.AppendUint32(w.b, v) }
-func (w *bdWriter) u64(v uint64) { w.b = append(w.b, tagU64); w.b = binary.LittleEndian.AppendUint64(w.b, v) }
+func (w *bdWriter) u8(v byte) { w.b = append(w.b, tagU8, v) }
+func (w *bdWriter) u32(v uint32) {
+	w.b = append(w.b, tagU32)
+	w.b = binary.LittleEndian.AppendUint32(w.b, v)
+}
+func (w *bdWriter) u64(v uint64) {
+	w.b = append(w.b, tagU64)
+	w.b = binary.LittleEndian.AppendUint64(w.b, v)
+}
 func (w *bdWriter) blobv(p []byte) {
 	w.b = append(w.b, tagBlob)
 	w.u32(uint32(len(p)))
@@ -148,6 +154,7 @@ func (l *lobbyConn) onTask(payload []byte) {
 		l.logf("tache: service %d sans id de tache (%v): %X", service, err, payload)
 		return
 	}
+	noteTask(l, service, task)
 
 	var reply []byte
 	switch {

@@ -1,28 +1,22 @@
-// d3-pubfiles — genere les fichiers « publisher » que Diablo III recupere au
-// demarrage de sa session en ligne : saison active, evenements communautaires et
-// liste noire d'objets.
+package main
+
+// Fichiers « publisher » que Diablo III recupere au demarrage de sa session en
+// ligne : saison active, evenements communautaires et liste noire d'objets.
 //
-// Ce sont trois fichiers TEXTE que le jeu recoit sous forme de chaine. Les
-// formats viennent du consommateur lui-meme (d3hack, season_events.hpp, qui les
+// Ce sont trois fichiers TEXTE que le jeu recoit sous forme de chaine, par
+// bdStorage.getPublisherFile (10/21) sur le lobby (services.go). Les formats
+// viennent du consommateur lui-meme (d3hack, season_events.hpp, qui les
 // synthetise cote client pour jouer hors ligne) :
 //
 //	seasons_config.txt    [Season N] + fenetre Start/End
 //	config.txt            lignes Cle "valeur", dont tous les CommunityBuff*
 //	blacklist_config.txt   sections [GBID] / [SNO]
 //
-// ATTENTION : generer ces fichiers ne suffit pas encore a les faire arriver dans
-// le jeu. Le client les demande par un bdRemoteTask qui passe par la connexion
-// lobby (TCP 3074), dont le handshake n'est pas encore resolu. Ce service
-// prepare donc le contenu ; la livraison suivra quand le transport existera.
-// C'est aussi pour ca qu'il sert les fichiers en HTTP : on peut les relire et
-// les valider des maintenant.
-//
-//	d3-pubfiles [-config pubfiles.json] [-out dir] [-listen :8470]
-package main
+// pubfiles.json pilote le contenu. Les fichiers sont ecrits au demarrage et par
+// « server.exe pubfiles » ; le lobby les relit a chaque requete.
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -30,12 +24,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
-// Config pilote le contenu servi. Un seul fichier a editer pour changer la
+// pubConfig pilote le contenu servi. Un seul fichier a editer pour changer la
 // saison ou allumer un evenement.
-type Config struct {
+type pubConfig struct {
 	// Saison active. d3hack tournait sur la 37 : on garde la meme par defaut
 	// pour que le comportement corresponde a ce qui a deja ete teste.
 	Season uint32 `json:"season"`
@@ -67,9 +60,9 @@ type Config struct {
 }
 
 // knownEvents est la liste complete des buffs que le jeu reconnait, dans
-// l'ordre ou d3hack les emet. Une cle absente de Config.Events est emise a "0"
-// plutot qu'omise : le jeu lit la valeur, et un champ manquant n'est pas la
-// meme chose qu'un champ a faux.
+// l'ordre ou d3hack les emet. Une cle absente de Events est emise a "0" plutot
+// qu'omise : le jeu lit la valeur, et un champ manquant n'est pas la meme chose
+// qu'un champ a faux.
 var knownEvents = []string{
 	"DoubleGoblins",
 	"DoubleBountyBags",
@@ -94,17 +87,16 @@ var knownEvents = []string{
 	"DoubleBloodShards",
 }
 
-func defaultConfig() Config {
-	return Config{
+func defaultPubConfig() pubConfig {
+	return pubConfig{
 		Season:      37,
 		SeasonStart: "Sat, 09 Feb 2025 00:00:00 GMT",
 		SeasonEnd:   "Tue, 09 Feb 2036 01:00:00 GMT",
 		BuffStart:   "Sat, 16 Sep 2023 00:00:00 GMT",
 		BuffEnd:     "Wed, 01 Dec 2027 01:00:00 GMT",
-		Events: map[string]bool{
-			// Rien d'allume par defaut : un serveur doit ressembler a la
-			// production tant qu'on ne decide pas le contraire.
-		},
+		// Rien d'allume par defaut : un serveur doit ressembler a la production
+		// tant qu'on ne decide pas le contraire.
+		Events:                      map[string]bool{},
 		LegendaryFind:               "1.0",
 		GoldFind:                    "1.0",
 		XP:                          "1.0",
@@ -123,10 +115,9 @@ func boolStr(b bool) string {
 	return "0"
 }
 
-// BuildSeasons rend seasons_config.txt. Les deux lignes de commentaire sont
-// celles du fichier d'origine : elles documentent la contrainte de format et ne
-// coutent rien a garder.
-func BuildSeasons(c Config) string {
+// buildSeasons rend seasons_config.txt. Les deux lignes de commentaire sont
+// celles du fichier d'origine : elles documentent la contrainte de format.
+func buildSeasons(c pubConfig) string {
 	var b strings.Builder
 	b.WriteString("# Format for dates MUST be: \" ? ? ? , DD MMM YYYY hh : mm:ss UTC\"\n")
 	b.WriteString("# The Day of Month(DD) MUST be 2 - digit; use either preceding zero or trailing space\n")
@@ -136,8 +127,8 @@ func BuildSeasons(c Config) string {
 	return b.String()
 }
 
-// BuildConfig rend config.txt : une ligne Cle "valeur" par reglage.
-func BuildConfig(c Config) string {
+// buildConfig rend config.txt : une ligne Cle "valeur" par reglage.
+func buildConfig(c pubConfig) string {
 	var b strings.Builder
 	line := func(k, v string) { fmt.Fprintf(&b, "%s \"%s\"\n", k, v) }
 
@@ -159,24 +150,21 @@ func BuildConfig(c Config) string {
 	return b.String()
 }
 
-// BuildBlacklist rend blacklist_config.txt. Les deux sections doivent exister
+// buildBlacklist rend blacklist_config.txt. Les deux sections doivent exister
 // meme vides, sinon le jeu n'a rien a analyser.
-func BuildBlacklist(_ Config) string {
-	return "# Item blacklist served by d3-pubfiles\n[GBID]\n\n[SNO]\n"
+func buildBlacklist(_ pubConfig) string {
+	return "# Item blacklist served by diablo-3\n[GBID]\n\n[SNO]\n"
 }
 
-func loadConfig(path string) (Config, error) {
-	c := defaultConfig()
-	if path == "" {
-		return c, nil
-	}
+func loadPubConfig(path string) (pubConfig, error) {
+	c := defaultPubConfig()
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		// Premiere execution : on ecrit le fichier par defaut pour qu'il y ait
 		// quelque chose a editer, plutot que d'echouer.
 		out, _ := json.MarshalIndent(c, "", "  ")
 		if werr := os.WriteFile(path, out, 0o644); werr == nil {
-			log.Printf("[pubfiles] %s cree avec les valeurs par defaut", path)
+			log.Printf("[D3 Pubfiles] %s created with defaults", path)
 		}
 		return c, nil
 	}
@@ -189,39 +177,31 @@ func loadConfig(path string) (Config, error) {
 	return c, nil
 }
 
-func main() {
-	cfgPath := flag.String("config", "pubfiles.json", "fichier de reglages (cree s'il manque)")
-	outDir := flag.String("out", "files", "dossier ou ecrire les trois fichiers")
-	listen := flag.String("listen", ":8470", "adresse HTTP pour relire les fichiers (vide = pas de serveur)")
-	flag.Parse()
-
-	cfg, err := loadConfig(*cfgPath)
+// writePubfiles genere les trois fichiers de cfgPath dans outDir.
+func writePubfiles(cfgPath, outDir string) error {
+	cfg, err := loadPubConfig(cfgPath)
 	if err != nil {
-		log.Fatalf("[pubfiles] %v", err)
+		return err
 	}
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
-		log.Fatalf("[pubfiles] %v", err)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
 	}
 
 	files := map[string]string{
-		"seasons_config.txt":   BuildSeasons(cfg),
-		"config.txt":           BuildConfig(cfg),
-		"blacklist_config.txt": BuildBlacklist(cfg),
+		"seasons_config.txt":   buildSeasons(cfg),
+		"config.txt":           buildConfig(cfg),
+		"blacklist_config.txt": buildBlacklist(cfg),
 	}
-
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-
 	for _, name := range names {
-		p := filepath.Join(*outDir, name)
+		p := filepath.Join(outDir, name)
 		if err := os.WriteFile(p, []byte(files[name]), 0o644); err != nil {
-			log.Printf("[pubfiles] %s: %v", name, err)
-			continue
+			return fmt.Errorf("%s: %w", name, err)
 		}
-		log.Printf("[pubfiles] %s (%d octets)", p, len(files[name]))
 	}
 
 	on := make([]string, 0, len(knownEvents))
@@ -231,31 +211,33 @@ func main() {
 		}
 	}
 	if len(on) == 0 {
-		log.Printf("[pubfiles] saison %d, aucun evenement actif", cfg.Season)
+		log.Printf("[D3 Pubfiles] %s: season %d, no community event", outDir, cfg.Season)
 	} else {
-		log.Printf("[pubfiles] saison %d, evenements actifs: %s", cfg.Season, strings.Join(on, ", "))
+		log.Printf("[D3 Pubfiles] %s: season %d, events: %s", outDir, cfg.Season, strings.Join(on, ", "))
 	}
+	return nil
+}
 
-	if *listen == "" {
+// pubfilesHandler sert les fichiers generes en lecture seule (port du tableau
+// de bord) : /pubfiles/ les liste, /pubfiles/<nom> en rend un.
+func pubfilesHandler(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/pubfiles/")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if name == "" {
+		entries, _ := os.ReadDir(pubDir)
+		for _, e := range entries {
+			fmt.Fprintf(w, "/pubfiles/%s\n", e.Name())
+		}
 		return
 	}
-
-	mux := http.NewServeMux()
-	for _, name := range names {
-		body := files[name]
-		mux.HandleFunc("/"+name, func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_, _ = w.Write([]byte(body))
-		})
+	if name != filepath.Base(name) || strings.Contains(name, "..") {
+		http.NotFound(w, r)
+		return
 	}
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		for _, name := range names {
-			fmt.Fprintf(w, "/%s\n", name)
-		}
-	})
-
-	srv := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	log.Printf("[pubfiles] relecture sur http://localhost%s/", *listen)
-	log.Fatal(srv.ListenAndServe())
+	b, err := os.ReadFile(filepath.Join(pubDir, name))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_, _ = w.Write(b)
 }

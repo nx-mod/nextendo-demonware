@@ -1,6 +1,0 @@
-# Format for dates MUST be: " ? ? ? , DD MMM YYYY hh : mm:ss UTC"
-# The Day of Month(DD) MUST be 2 - digit; use either preceding zero or trailing space
-[Season 37]
-Start "Sat, 09 Feb 2025 00:00:00 GMT"
-End "Tue, 09 Feb 2036 01:00:00 GMT"
-

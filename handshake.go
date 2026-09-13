@@ -125,6 +125,9 @@ func (l *lobbyConn) send(b []byte) error {
 }
 
 func (l *lobbyConn) dump(tag string, b []byte) {
+	if l.dumpDir == "" {
+		return
+	}
 	name := fmt.Sprintf("lobby_%03d_%s.bin", l.n, tag)
 	_ = os.WriteFile(filepath.Join(l.dumpDir, name), b, 0o644)
 }
@@ -361,7 +364,11 @@ func (l *lobbyConn) onEncrypted(raw []byte) {
 	}
 	n := binary.LittleEndian.Uint32(pt[0:4])
 	inner := pt[4]
-	l.logf("msg 0x%02X seq=%d mac=%v inner_len=%d inner_type=0x%02X clair:\n%s", typ, seq, macOK, n, inner, hex.Dump(pt))
+	if verbose {
+		l.logf("msg 0x%02X seq=%d mac=%v inner_len=%d inner_type=0x%02X clair:\n%s", typ, seq, macOK, n, inner, hex.Dump(pt))
+	} else if !macOK {
+		l.logf("msg 0x%02X seq=%d MAC invalide, ignore", typ, seq)
+	}
 	if !macOK || int(n) > len(pt)-5 {
 		return
 	}

@@ -34,6 +34,7 @@ type playerID struct {
 	Username string `json:"username"`
 	PID      uint64 `json:"pid"`
 	Sub      string `json:"sub"`
+	Kind     string `json:"kind,omitempty"` // "switch" ou "ryujinx" (emulateur), cf. identity.go
 }
 
 var (
@@ -119,7 +120,7 @@ func refreshAliases() {
 		return
 	}
 	aliasLoaded = time.Now()
-	f, err := os.Open(envOr("BAASPROXY_LOG", "../../nextendo/baas-proxy/logs/baas-proxy.log"))
+	f, err := os.Open(envOr("BAASPROXY_LOG", "../baas-proxy/logs/baas-proxy.log"))
 	if err != nil {
 		return
 	}

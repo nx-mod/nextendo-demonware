@@ -4,8 +4,13 @@ package main
 //
 // extra_data (chaine JSON) porte « username » (le surnom Nintendo) et « token »
 // (id_token NSA). Le champ « nnex » du jeton vaut « nx2.<b64>.<sig> » ou <b64>
-// decode donne « <PID Nextendo>.<surnom>.<horodatage> ». Ce PID est l'identifiant
-// que Citron utilise pour ses amis (vu : su6ur6an = 1800011760 = 0x6B49FFF0).
+// decode donne « <PID Nextendo>.<surnom>.<expiration> ». Ce PID est le compte
+// Nextendo du joueur ; Citron s'en sert aussi comme identifiant d'ami (vu :
+// su6ur6an = 1800011760 = 0x6B49FFF0). La signature est verifiee dans gates.go.
+//
+// Nature de l'appareil, pour l'online-check de nextendo-account : l'id_token de
+// l'emulateur porte les claims « di » et « sn », celui de la console (emis via
+// le BaaS Nextendo) non. Constate le 2026-09-13 sur Citron 2.7.7 et une Switch CFW.
 
 import (
 	"encoding/base64"
@@ -13,12 +18,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-type identity struct {
-	Username string `json:"username"`
-	PID      uint64 `json:"pid"`
-	Sub      string `json:"sub"`
-}
 
 func b64any(s string) []byte {
 	s = strings.TrimRight(s, "=")
@@ -31,35 +30,41 @@ func b64any(s string) []byte {
 	return nil
 }
 
-func playerIdentity(body []byte) identity {
-	var id identity
+// playerIdentity rend l'identite du joueur et le claim nnex brut ("" s'il manque).
+func playerIdentity(body []byte) (playerID, string) {
+	id := playerID{Kind: "switch"}
 	var req struct {
 		ExtraData string `json:"extra_data"`
 	}
 	if json.Unmarshal(body, &req) != nil {
-		return id
+		return id, ""
 	}
 	var extra struct {
 		Username string `json:"username"`
 		Token    string `json:"token"`
 	}
 	if json.Unmarshal([]byte(req.ExtraData), &extra) != nil {
-		return id
+		return id, ""
 	}
 	id.Username = extra.Username
 
 	parts := strings.Split(extra.Token, ".")
 	if len(parts) < 2 {
-		return id
+		return id, ""
 	}
 	var claims struct {
-		Sub  string `json:"sub"`
-		Nnex string `json:"nnex"`
+		Sub  string          `json:"sub"`
+		Nnex string          `json:"nnex"`
+		DI   json.RawMessage `json:"di"`
+		SN   json.RawMessage `json:"sn"`
 	}
 	if json.Unmarshal(b64any(parts[1]), &claims) != nil {
-		return id
+		return id, ""
 	}
 	id.Sub = claims.Sub
+	if len(claims.DI) > 0 || len(claims.SN) > 0 {
+		id.Kind = "ryujinx" // nom Nextendo de la nature « emulateur »
+	}
 	nn := strings.TrimPrefix(claims.Nnex, "nx2.")
 	if i := strings.IndexByte(nn, '.'); i > 0 {
 		nn = nn[:i]
@@ -73,5 +78,5 @@ func playerIdentity(body []byte) identity {
 			id.Username = f[1]
 		}
 	}
-	return id
+	return id, claims.Nnex
 }
