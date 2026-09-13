@@ -71,6 +71,35 @@ func serveSTUN(port string, dumpDir string) {
 		stunSeen[sig] = cnt + 1
 		stunSeenMu.Unlock()
 
+		// Traversee NAT (paquets de 29 octets, format documente par
+		// Protarium-Network/bo2-wiiu-demonware) :
+		//	type | u16 version | id[10] | hmac[4] | adresseSource[6] | adresseDest[6]
+		// 0x0A : un joueur qui rejoint demande a etre presente a l'hote. On
+		// renvoie le paquet OCTET POUR OCTET a la destination avec le type 0x0B
+		// (INTRO) ; le HMAC couvre les adresses et seul le demandeur le verifie,
+		// donc rien d'autre ne doit changer. L'hote repond 0x0C directement au
+		// demandeur, ce qui ouvre la connexion P2P. 0x0E : keepalive, sans reponse.
+		if n == 29 && (buf[0] == 0x0A || buf[0] == 0x0E) {
+			if buf[0] == 0x0E {
+				continue
+			}
+			dst := buf[23:29]
+			dstIP := net.IPv4(dst[0], dst[1], dst[2], dst[3])
+			dstPort := int(binary.LittleEndian.Uint16(dst[4:6]))
+			if dstPort == 0 || dstIP.Equal(net.IPv4(0, 255, 0, 255)) {
+				log.Printf("[nat] 0x0A de %s sans destination: %X", addr, buf[:n])
+				continue
+			}
+			intro := append([]byte{0x0B}, buf[1:n]...)
+			to := &net.UDPAddr{IP: dstIP, Port: dstPort}
+			if _, err := pc.WriteTo(intro, to); err != nil {
+				log.Printf("[nat] INTRO vers %s: %v", to, err)
+			} else {
+				log.Printf("[nat] INTRO %s -> %s (id=%X)", addr, to, buf[3:13])
+			}
+			continue
+		}
+
 		resp := []byte{}
 		switch buf[0] {
 		case 30:

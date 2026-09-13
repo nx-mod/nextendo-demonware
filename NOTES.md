@@ -146,6 +146,13 @@ lobby. Raw bytes, not RFC 5389 (format from project-bo4/shield-development):
 Unanswered → NAT type unknown → **online games become local only** (friends-online
 worked while these still reached real Demonware).
 
+**Confirmed live 2026-09-13** (d3hack SendTo/RecvFrom hook with frame walk): IP
+discovery sent from 0xC03D6C (serializer 0xC10A08), NAT discovery from 0xC03DA4
+(serializer 0xC1145C), replies read at 0xC040A8; console received our 9- and
+15-byte replies. A second NAT probe `14 02 00 03` follows. After the replies,
+Citron's quick match performed 21/5 → 21/1 → 21/2 (online games unlocked).
+Also seen, not yet handled: `0e 02 00 0? … ff 00 ff 00 …` (29 B, type 14) on UDP 3074.
+
 Lesson: two hours of static tracing did not find the sender (it is a virtual call
 through the `bdSocket` vtable at 0x1144568, sendTo = +0x38); the packet format
 was one search away in an open-source emulator. Check references early.
