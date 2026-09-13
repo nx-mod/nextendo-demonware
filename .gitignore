@@ -1,0 +1,7 @@
+*.exe
+*.log
+*.err
+dumps/
+sessions/
+capture/
+*.exe~

@@ -1,0 +1,4 @@
+# Item blacklist served by d3-pubfiles
+[GBID]
+
+[SNO]
