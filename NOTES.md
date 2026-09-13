@@ -7,8 +7,18 @@ updated as you go: it is the map for the next game server too.
 - Game: Diablo III Switch, title `01001B300B9BE000`, Demonware title "crimson", id 5745
 - Binary: `/atmosphere/contents/01001B300B9BE000/exefs/main` (the d3hack
   downgrade target), extracted to `d3hack/capture/nso/{text,rodata,data}.bin`
-- Status (2026-09-13): auth ✔ · encrypted lobby ✔ · season 37 served ✔ ·
-  NAT probes ✘ (so online games show "local only") · matchmaking ✘
+- Status (2026-09-13 04:12): auth ✔ · encrypted lobby ✔ · season 37 served ✔ ·
+  NAT probes ✔ · matchmaking ✔ — **console quick-matched into a Citron-hosted
+  public game and both played together**, entirely on local servers.
+  Open: friends presence (Nextendo/NPNS side), service 29/68/4/10-user-files
+  real storage, stable per-account user IDs.
+
+Join sequence observed: host 21/1 createSession → 21/2 update; joiner 21/5
+findSessions (1 result) → direct P2P connect (same LAN, no 0x0A introduction
+needed) → host 21/12 updateSessionPlayers(sessionID, u32 players=2, info).
+A joiner rejects a found game instantly (and hosts its own) when one session
+attribute differs from its filter; seen once with a flag set 1 vs 0, cause
+not yet identified (both heroes were seasonal).
 
 ---
 

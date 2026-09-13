@@ -9,6 +9,7 @@ package main
 //	createSession (21/1)  : info
 //	updateSession (21/2)  : 13 blob sessionID[8] | info
 //	deleteSession (21/3)  : 13 blob sessionID[8]
+//	updatePlayers (21/12) : 13 blob sessionID[8] | 08 u32 nbJoueurs | info
 //	findSessions  (21/5)  : 08 u32 requete | 08 u32 debut | 08 u32 max | filtres types
 //
 //	info (client -> serveur) : 13 blob hostAddr | 08 u32 gameType | 08 u32 maxPlayers | attributs D3 types
@@ -34,6 +35,7 @@ const (
 	mmUpdateSession = 2
 	mmDeleteSession = 3
 	mmFindSessions  = 5
+	mmUpdatePlayers = 12
 )
 
 type mmSession struct {
@@ -42,6 +44,7 @@ type mmSession struct {
 	hostAddr   []byte
 	gameType   uint32
 	maxPlayers uint32
+	numPlayers uint32
 	attrs      []byte // octets types tels qu'envoyes par l'hote, apres maxPlayers
 	updated    time.Time
 }
@@ -125,7 +128,7 @@ func (l *lobbyConn) onMatchMaking(task byte, r *bdReader) []byte {
 			l.logf("createSession illisible: %v", err)
 			return taskReply(task, errUnhandled, nil)
 		}
-		s := &mmSession{owner: l.n, hostAddr: host, gameType: gt, maxPlayers: maxp, attrs: attrs, updated: time.Now()}
+		s := &mmSession{owner: l.n, hostAddr: host, gameType: gt, maxPlayers: maxp, numPlayers: 1, attrs: attrs, updated: time.Now()}
 		_, _ = rand.Read(s.id[:])
 		sessionsMu.Lock()
 		sessions[s.id] = s
@@ -155,6 +158,31 @@ func (l *lobbyConn) onMatchMaking(task byte, r *bdReader) []byte {
 		}
 		sessionsMu.Unlock()
 		l.logf("matchmaking UPDATE session=%X connue=%v", id, ok)
+		return taskReply(task, 0, nil)
+
+	case mmUpdatePlayers:
+		// Vu en direct quand la console a rejoint la partie de Citron :
+		// 13 blob sessionID | 08 u32 nbJoueurs | info complete.
+		sid, err := r.blob()
+		if err != nil || len(sid) != 8 {
+			l.logf("updateSessionPlayers: id illisible (%v)", err)
+			return taskReply(task, 0, nil)
+		}
+		players, _ := r.u32()
+		host, gt, maxp, attrs, err := readInfo(r)
+		var id [8]byte
+		copy(id[:], sid)
+		sessionsMu.Lock()
+		s, ok := sessions[id]
+		if ok {
+			s.numPlayers = players
+			if err == nil {
+				s.hostAddr, s.gameType, s.maxPlayers, s.attrs = host, gt, maxp, attrs
+			}
+			s.updated = time.Now()
+		}
+		sessionsMu.Unlock()
+		l.logf("matchmaking JOUEURS session=%X joueurs=%d/%d connue=%v", id, players, maxp, ok)
 		return taskReply(task, 0, nil)
 
 	case mmDeleteSession:
@@ -199,7 +227,7 @@ func (l *lobbyConn) onMatchMaking(task byte, r *bdReader) []byte {
 				w.blobv(s.id[:])
 				w.u32(s.gameType)
 				w.u32(s.maxPlayers)
-				w.u32(1)
+				w.u32(s.numPlayers)
 				w.raw(s.attrs)
 			}
 			return uint32(len(found))
