@@ -48,31 +48,65 @@ var (
 	aliasLoaded time.Time
 )
 
+// Connexions dont le fichier d'identite n'existait pas encore a la poignee de
+// main (ticket emis par un d3-auth plus ancien). On retente a chaque recherche
+// d'amis : le fichier apparait des que le joueur se reauthentifie.
+var pending = map[uint64]pendingID{}
+
+type pendingID struct {
+	conn   *lobbyConn
+	ticket []byte
+}
+
 // loadIdentity retrouve le joueur d'un ticket via le fichier ecrit par d3-auth.
 func (l *lobbyConn) loadIdentity(ticket []byte) {
 	if len(ticket) < 41 {
 		return
 	}
+	if !l.tryIdentity(ticket) {
+		onlineMu.Lock()
+		pending[l.n] = pendingID{conn: l, ticket: append([]byte{}, ticket...)}
+		onlineMu.Unlock()
+		l.logf("identite en attente (ticket %x)", ticket[33:41])
+	}
+}
+
+func (l *lobbyConn) tryIdentity(ticket []byte) bool {
 	p := filepath.Join(l.sessDir, "id_"+hex.EncodeToString(ticket[33:41])+".json")
 	raw, err := os.ReadFile(p)
 	if err != nil {
-		l.logf("identite: %v", err)
-		return
+		return false
 	}
 	var id playerID
 	if json.Unmarshal(raw, &id) != nil || id.Username == "" {
-		return
+		return false
 	}
 	l.player = &id
 	onlineMu.Lock()
 	online[l.n] = &id
+	delete(pending, l.n)
 	onlineMu.Unlock()
 	l.logf("joueur %q pid=%d", id.Username, id.PID)
+	return true
+}
+
+// retryPending retente les identites manquantes.
+func retryPending() {
+	onlineMu.Lock()
+	todo := make([]pendingID, 0, len(pending))
+	for _, p := range pending {
+		todo = append(todo, p)
+	}
+	onlineMu.Unlock()
+	for _, p := range todo {
+		p.conn.tryIdentity(p.ticket)
+	}
 }
 
 func dropOnline(conn uint64) {
 	onlineMu.Lock()
 	delete(online, conn)
+	delete(pending, conn)
 	onlineMu.Unlock()
 }
 
