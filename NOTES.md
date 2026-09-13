@@ -135,15 +135,20 @@ Results for getPublisherFile: one `bdFileData` = one blob.
 
 ---
 
-## 5. NAT probes (UDP 3074) — IN PROGRESS
+## 5. NAT probes (UDP 3074) — implemented, awaiting live confirmation
 
-Client sends from :3074 to `stun.*.demonware.net:3074`:
-`14 02 00 00` (4 B) and `1e 03 00` (3 B), ~8/s. They are Demonware packets, not
-RFC 5389 STUN. Unanswered → NAT type unknown → **online games become local only**.
-(Friends-online worked while these still reached real Demonware.)
-Leads: `mov #0x14` at 0xBD1910 with `cmp #0x15` at 0xBD1A78; `#0x15` cluster at
-0xC02DE8; `stun.us.demonware.net` referenced at 0xC02738; strings
-`BD_NAT_OPEN/MODERATE/STRICT` exist (reached through a pointer table).
+Client sends from :3074 to `stun.*.demonware.net:3074` just before joining the
+lobby. Raw bytes, not RFC 5389 (format from project-bo4/shield-development):
+```
+1e 03 00      type 30 IP discovery  -> 31 | 02 | 00 | ip[4] (network order) | port u16 LE
+14 02 00 00   type 20 NAT discovery -> 21 | 02 | 00 | ip[4] | port u16 LE | serverIp[4] | serverPort u16 LE
+```
+Unanswered → NAT type unknown → **online games become local only** (friends-online
+worked while these still reached real Demonware).
+
+Lesson: two hours of static tracing did not find the sender (it is a virtual call
+through the `bdSocket` vtable at 0x1144568, sendTo = +0x38); the packet format
+was one search away in an open-source emulator. Check references early.
 
 ---
 

@@ -34,90 +34,69 @@ var (
 	stunSeen   = map[string]int{}
 	stunSeenMu sync.Mutex
 )
-// serveSTUN repond aux sondes NAT sur UDP. Les hotes stun.*.demonware.net
-// etaient absents du fichier hosts de la console, donc elle les envoyait
-// directement chez Activision (45 paquets vers 185.34.107.128:3074 en une
-// session). Redirige en local, il faut quelqu'un pour repondre.
+// serveSTUN repond aux sondes NAT Demonware sur UDP 3074 (hotes
+// stun.{us,eu,jp,au}.demonware.net). Ce n'est pas du STUN RFC 5389 : trois
+// octets d'en-tete bruts « type | version | bourrage », puis des champs bruts.
+// Format repris du serveur STUN de project-bo4/shield-development (meme
+// generation du SDK Demonware) et confirme par les sondes de la console :
 //
-// On journalise d'abord le paquet recu : Demonware utilise le port 3074 mais
-// pas forcement du STUN RFC 5389 strict, et le hexdump le dira. Si l'en-tete
-// ressemble a du STUN (type 0x0001, magic cookie 0x2112A442), on renvoie une
-// Binding Success Response avec XOR-MAPPED-ADDRESS, ce qui est ce qu'un client
-// attend pour apprendre son adresse publique.
+//	1e 03 00       type 30, decouverte d'IP  -> 31 | 02 | 00 | ip[4] | port u16
+//	14 02 00 00    type 20, decouverte NAT   -> 21 | 02 | 00 | ip[4] | port u16 | ipServeur[4] | portServeur u16
+//
+// L'IP s'ecrit en ordre reseau, le port en u16 petit-boutiste. Sans ces
+// reponses le type de NAT reste inconnu et le jeu ne propose que des parties
+// locales.
 func serveSTUN(port string, dumpDir string) {
 	pc, err := net.ListenPacket("udp", ":"+port)
 	if err != nil {
 		log.Printf("[stun] udp %s indisponible: %v", port, err)
 		return
 	}
-	log.Printf("[stun] a l'ecoute UDP %s", port)
+	serverIP := net.ParseIP(envOr("D3_SERVER_IP", "192.168.137.1")).To4()
+	log.Printf("[stun] a l'ecoute UDP %s (ip serveur annoncee %s)", port, serverIP)
 
 	buf := make([]byte, 2048)
 	for {
 		n, addr, err := pc.ReadFrom(buf)
-		if err != nil {
+		if err != nil || n < 3 {
 			continue
 		}
-		k := connNum.Add(1)
-		// Les sondes arrivent par paires ~8 fois par seconde : on ne journalise
-		// que les premieres de chaque forme, sinon elles noient le reste. Les
-		// formes vues : "1e 03 00" et "14 02 00 00" (pas du STUN RFC 5389).
+		ua, ok := addr.(*net.UDPAddr)
+		if !ok || ua.IP.To4() == nil {
+			continue
+		}
 		sig := fmt.Sprintf("%X", buf[:n])
 		stunSeenMu.Lock()
 		cnt := stunSeen[sig]
 		stunSeen[sig] = cnt + 1
 		stunSeenMu.Unlock()
-		if cnt < 2 {
-			log.Printf("==== #%d STUN udp=%s from=%s %d octets:\n%s", k, port, addr, n, hex.Dump(buf[:n]))
-		} else if cnt == 200 {
-			log.Printf("[stun] forme %s vue 200 fois, journalisation coupee", sig)
-		}
-		if n > 0 {
-			name := fmt.Sprintf("stun_%03d_udp%s.bin", k, port)
-			_ = os.WriteFile(filepath.Join(dumpDir, name), buf[:n], 0o644)
-		}
 
-		if n < 20 {
+		resp := []byte{}
+		switch buf[0] {
+		case 30:
+			resp = append(resp, 31, 2, 0)
+			resp = append(resp, ua.IP.To4()...)
+			resp = binary.LittleEndian.AppendUint16(resp, uint16(ua.Port))
+		case 20:
+			resp = append(resp, 21, 2, 0)
+			resp = append(resp, ua.IP.To4()...)
+			resp = binary.LittleEndian.AppendUint16(resp, uint16(ua.Port))
+			resp = append(resp, serverIP...)
+			resp = binary.LittleEndian.AppendUint16(resp, 3074)
+		default:
+			if cnt < 2 {
+				log.Printf("[stun] paquet inconnu de %s: %s", addr, hex.EncodeToString(buf[:n]))
+				_ = os.WriteFile(filepath.Join(dumpDir, fmt.Sprintf("stun_unknown_%d.bin", connNum.Add(1))), buf[:n], 0o644)
+			}
 			continue
 		}
-		msgType := binary.BigEndian.Uint16(buf[0:])
-		cookie := binary.BigEndian.Uint32(buf[4:])
-		if msgType != 0x0001 || cookie != 0x2112A442 {
-			log.Printf("#%d pas du STUN standard (type=0x%04X cookie=0x%08X) — pas de reponse", k, msgType, cookie)
-			continue
-		}
-
-		ua, ok := addr.(*net.UDPAddr)
-		if !ok {
-			continue
-		}
-		ip4 := ua.IP.To4()
-		if ip4 == nil {
-			continue
-		}
-
-		// Binding Success Response (0x0101) + XOR-MAPPED-ADDRESS (0x0020).
-		resp := make([]byte, 0, 32)
-		resp = append(resp, 0x01, 0x01) // type
-		resp = append(resp, 0x00, 0x0C) // longueur du corps
-		resp = append(resp, buf[4:20]...)
-
-		xport := uint16(ua.Port) ^ uint16(cookie>>16)
-		xip := make([]byte, 4)
-		binary.BigEndian.PutUint32(xip, binary.BigEndian.Uint32(ip4)^cookie)
-
-		resp = append(resp, 0x00, 0x20, 0x00, 0x08, 0x00, 0x01)
-		resp = binary.BigEndian.AppendUint16(resp, xport)
-		resp = append(resp, xip...)
-
 		if _, err := pc.WriteTo(resp, addr); err != nil {
-			log.Printf("#%d reponse STUN: %v", k, err)
-		} else {
-			log.Printf("#%d -> STUN binding response, mapped=%s:%d", k, ua.IP, ua.Port)
+			log.Printf("[stun] reponse a %s: %v", addr, err)
+		} else if cnt < 2 {
+			log.Printf("[stun] %s type %d -> %X", addr, buf[0], resp)
 		}
 	}
 }
-
 func main() {
 	// 3074 est le port historique du stack bd (partagé avec Xbox Live) ; les
 	// voisins sont là parce que le port réel n'est pas déductible du binaire.
