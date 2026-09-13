@@ -59,7 +59,7 @@ type bdWriter struct{ b []byte }
 func (w *bdWriter) u8(v byte)    { w.b = append(w.b, tagU8, v) }
 func (w *bdWriter) u32(v uint32) { w.b = append(w.b, tagU32); w.b = binary.LittleEndian.AppendUint32(w.b, v) }
 func (w *bdWriter) u64(v uint64) { w.b = append(w.b, tagU64); w.b = binary.LittleEndian.AppendUint64(w.b, v) }
-func (w *bdWriter) blob(p []byte) {
+func (w *bdWriter) blobv(p []byte) {
 	w.b = append(w.b, tagBlob)
 	w.u32(uint32(len(p)))
 	w.b = append(w.b, p...)
@@ -172,8 +172,14 @@ func (l *lobbyConn) onTask(payload []byte) {
 			l.logf("tache bdStorage.getPublisherFile ctx=%q file=%q -> ABSENT", ctx, name)
 			break
 		}
-		reply = taskReply(task, 0, func(w *bdWriter) uint32 { w.blob(data); return 1 })
+		reply = taskReply(task, 0, func(w *bdWriter) uint32 { w.blobv(data); return 1 })
 		l.logf("tache bdStorage.getPublisherFile ctx=%q file=%q -> %s (%d octets)", ctx, name, path, len(data))
+
+	case service == svcMatchMaking:
+		if reply = l.onMatchMaking(task, r); reply == nil {
+			reply = taskReply(task, 0, nil)
+			l.logf("tache matchmaking NON GEREE tache=%d args:\n%s", task, hex.Dump(payload))
+		}
 
 	default:
 		// Succes sans resultat : benin pour les requetes de liste, et une

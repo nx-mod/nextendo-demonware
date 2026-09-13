@@ -130,6 +130,7 @@ func (l *lobbyConn) dump(tag string, b []byte) {
 
 func (l *lobbyConn) run() {
 	defer l.c.Close()
+	defer dropSessionsOf(l.n)
 	l.logf("==== CONNECT from=%s", l.c.RemoteAddr())
 
 	hello, err := l.readFull(helloLen)
