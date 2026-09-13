@@ -89,7 +89,7 @@ One process (`server.exe`), in `nextendo/diablo-3`:
 
 | piece | port | files |
 |---|---|---|
-| `nextendo/sni-router` | TCP 443 | routes `*.demonware.net` SNI → auth (`BACKEND_D3`, no PROXY header) |
+| `nextendo/sni-router` | TCP 443 | routes `*.demonware.net` SNI → auth (`BACKEND_D3`, PROXY header) |
 | auth | TCP 8460 (TLS) | `auth.go`, `identity.go`, `gates.go` — `/auth/` login, Nextendo gates, tickets in `sessions/` |
 | lobby | TCP 3074 | `lobby.go`, `handshake.go`, `bdcrypto.go`, `pubkey.go`, `services.go`, `matchmaking.go`, `friends.go` |
 | NAT | UDP 3074 | `nat.go` — IP/NAT discovery, introductions |
@@ -288,8 +288,11 @@ Same contract as the NEX game servers (reference: `nextendo/luigis-mansion-3`).
 
 - **sni-router** owns TCP 443 for every TLS host, so each game with a TLS host
   gets a route there (ACNH's came as a PR the same way). D3's route is
-  `demonware.net` → `BACKEND_D3` (127.0.0.1:8460), plain passthrough. The lobby
-  (TCP/UDP 3074) needs no router: DNS points straight at the server.
+  `demonware.net` → `BACKEND_D3` (127.0.0.1:8460), TLS passthrough with the
+  PROXY v1 header like the NEX backends (`SNI_PROXY_PROTOCOL=1` on the router,
+  `NEXTENDO_PROXY_PROTOCOL=1` here, `proxyproto.go`), so the auth and the
+  online-check see the player's address. The lobby (TCP/UDP 3074) needs no
+  router: DNS points straight at the server.
 - **Gates at login** (`gates.go`, before a ticket is issued): Nextendo PID from
   the id_token's `nnex` claim (`nx2.<b64 PID.nick.expiry>.<HMAC-SHA256 "nex:"…>`),
   signature checked when the Nextendo secret is configured

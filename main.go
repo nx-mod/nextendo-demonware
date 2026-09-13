@@ -107,7 +107,6 @@ func main() {
 	go serveNAT(natPort)
 	startLobby()
 
-	log.Printf("[D3 Auth] listening HTTPS :%d (cert=%s)", authPort, certFile)
 	if err := serveAuth(); err != nil {
 		log.Fatalf("[D3 Auth] stopped: %v", err)
 	}

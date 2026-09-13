@@ -178,7 +178,17 @@ func serveAuth() error {
 		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS10},
 		ReadHeaderTimeout: 15 * time.Second,
 	}
-	return srv.ListenAndServeTLS(certFile, keyFile)
+	ln, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return err
+	}
+	// Behind sni-router: the PROXY header carries the player's address (proxyproto.go).
+	proxyProto := os.Getenv("NEXTENDO_PROXY_PROTOCOL") == "1"
+	if proxyProto {
+		ln = newProxyListener(ln)
+	}
+	log.Printf("[D3 Auth] listening HTTPS :%d (proxyProto=%v, cert=%s)", authPort, proxyProto, certFile)
+	return srv.ServeTLS(ln, certFile, keyFile)
 }
 
 // clientIP rend l'adresse de l'appelant sans le port (127.0.0.1 derriere sni-router).
