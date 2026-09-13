@@ -168,6 +168,8 @@ func main() {
 	}
 	// Les sondes NAT arrivent en UDP sur le meme port que le lobby.
 	go serveSTUN("3074", dumpDir)
+	// Presence Nextendo : joueurs D3 connectes -> nextendo-account (presence.go).
+	startPresenceReporter()
 
 	log.Printf("[d3-lobby] à l'écoute sur %d port(s): %s — dumps=%s", opened, strings.Join(ports, ","), dumpDir)
 	select {}
