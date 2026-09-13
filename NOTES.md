@@ -7,11 +7,14 @@ updated as you go: it is the map for the next game server too.
 - Game: Diablo III Switch, title `01001B300B9BE000`, Demonware title "crimson", id 5745
 - Binary: `/atmosphere/contents/01001B300B9BE000/exefs/main` (the d3hack
   downgrade target), extracted to `d3hack/capture/nso/{text,rodata,data}.bin`
-- Status (2026-09-13 04:12): auth ✔ · encrypted lobby ✔ · season 37 served ✔ ·
-  NAT probes ✔ · matchmaking ✔ — **console quick-matched into a Citron-hosted
-  public game and both played together**, entirely on local servers.
-  Open: friends presence (Nextendo/NPNS side), service 29/68/4/10-user-files
-  real storage, stable per-account user IDs.
+- Status (2026-09-13): auth ✔ · encrypted lobby ✔ · season 37 served ✔ ·
+  NAT probes ✔ · matchmaking ✔ · console ↔ Citron co-op ✔ · friend lookups ✔ ·
+  presence reported ✔ — entirely on local servers.
+  Open: "friends online" count on the devices (Nextendo presence must reach
+  them), service 29/68/4/10-user-files real storage, stable per-account user IDs.
+- Home: `nextendo/diablo-3`, one server laid out like the other Nextendo game
+  servers (§1, §7). Until 2026-09-13 it was `switch-cfw/d3-server` with three
+  binaries (d3-auth, d3-lobby, d3-pubfiles); the git history came along.
 
 Join sequence observed: host 21/1 createSession → 21/2 update; joiner 21/5
 findSessions (1 result) → direct P2P connect (same LAN, no 0x0A introduction
@@ -44,7 +47,7 @@ Nintendo device-account ID, Citron friends by Nextendo PID. Verified both ways
 online to nextendo-account: `POST /internal/presence-batch {appId, status:2, pids}`
 every 30 s with `X-Internal-Key` (TTL 90 s). nextendo-account hands it to
 **nx-account**, which builds the console's BaaS friend objects ("online / playing").
-d3-lobby now does the same with the players' Nextendo PIDs (presence.go).
+diablo-3 does the same with the players' Nextendo PIDs (presence.go).
 Limits: nx-account is **private** (not in the NextendoNetwork org); the console's
 friend list and account-link page come from the real Nextendo, whose presence
 intake is internal — so a locally hosted D3 server's presence only reaches devices
@@ -58,6 +61,20 @@ the website when `NEXTENDO_STATIC` points at the site files; ours points at
 gives login, account/friends, sessions, status, downloads, verify/forgot/reset
 locally (PolyForm Shield license allows self-hosting).
 
+**Local test accounts (assessed 2026-09-13, not built).** The D3 server needs
+nothing: it takes the player from whatever Nextendo account the login token
+carries (nnex claim), local or real. The blockers are on the devices:
+- *Citron* pins its Nextendo API to `nextendo.network` (loopback overrides only).
+  Workable without a rebuild: hosts `nextendo.network` → PC, the local CA
+  installed on the phone (Citron trusts user CAs), and that host routed to the
+  local nextendo-account (tls-front). Accounts are then made on the local site
+  and friends/presence are local end to end. While active, the real account is
+  unreachable in Citron.
+- *Console*: account link, friend list and presence come from the private
+  **nx-account** through baas-proxy → real Nextendo. Needs a local stand-in for
+  the BaaS endpoints the console calls (all visible in the baas-proxy log),
+  backed by the local nextendo-account.
+
 **Confirmed 2026-09-13 04:37:** console (d3hack, online-safe config in
 `d3hack-online-safe.toml`) hosted; Citron (stock 2.7.7) quick-matched in via the
 NAT introduction relay; host reported 2/4 and the session held. Community buffs
@@ -68,12 +85,22 @@ served from Config.txt instead of the client. Friends: Citron's login lookup
 
 ## 1. Components
 
-| service | port | what |
+One process (`server.exe`), in `nextendo/diablo-3`:
+
+| piece | port | files |
 |---|---|---|
-| `nextendo/sni-router` | TCP 443 | routes `*.demonware.net` SNI → d3-auth |
-| `d3-auth` | TCP 8460 (TLS) | `/auth/` JSON login, issues tickets, writes `sessions/*.tkt` |
-| `d3-lobby` | TCP 3074 | encrypted lobby + remote tasks; UDP 3074 NAT probes |
-| `d3-pubfiles` | files + HTTP 8470 | generates `Config.txt`, `Seasons.txt`, `Blacklist.txt` content |
+| `nextendo/sni-router` | TCP 443 | routes `*.demonware.net` SNI → auth (`BACKEND_D3`, no PROXY header) |
+| auth | TCP 8460 (TLS) | `auth.go`, `identity.go`, `gates.go` — `/auth/` login, Nextendo gates, tickets in `sessions/` |
+| lobby | TCP 3074 | `lobby.go`, `handshake.go`, `bdcrypto.go`, `pubkey.go`, `services.go`, `matchmaking.go`, `friends.go` |
+| NAT | UDP 3074 | `nat.go` — IP/NAT discovery, introductions |
+| publisher files | — | `pubfiles.go` + `pubfiles.json` → `pubfiles/` (`server.exe pubfiles` regenerates) |
+| presence | — | `presence.go` → nextendo-account `/internal/presence-batch` |
+| dashboard | HTTP 8093 | `dashboard.go` — `/api/stats`, `/healthz`, `/pubfiles/` |
+
+Config: `.env` (see `example.env`). Launch: `nextendo_servers.bat`,
+`restart_stack.ps1`, `start_nextendo_servers.ps1` (entry `diablo-3`); log in
+`nextendo/logs/diablo-3.log`. Raw captures only with `D3_DUMPS=<dir>` (one
+folder per run), decrypted-message hex dumps only with `D3_VERBOSE=1`.
 
 DNS: the console uses Atmosphere hosts (`nextendo/switch_hosts_local.txt`,
 sections 6–7). Emulators on the PC hotspot resolve through Windows ICS, which
@@ -87,7 +114,7 @@ Hosts the game uses (from rodata):
 
 ---
 
-## 2. Auth (HTTPS JSON) — `d3-auth`
+## 2. Auth (HTTPS JSON) — `auth.go`
 
 Request body (all integers are JSON *strings*):
 `{auth_task, iv_seed, title_id:"5745", identity:"356c4bc3", extra_data:"{version, token(NSA id_token), username, extended_data}"}`
@@ -110,12 +137,12 @@ Ticket layout (parse_ticket 0xBFCF30):
 +97  [24] LOBBY KEY  (becomes conn+0x100, signs the lobby handshake)
 +121 [3]  | +124 [4]
 ```
-d3-auth fills +97 with session_key[0:24] and sends the same bytes as server
+auth.go fills +97 with session_key[0:24] and sends the same bytes as server
 ticket. The lobby recovers the key from the ticket echoed back in 0x82.
 
 ---
 
-## 3. Lobby transport — `d3-lobby/handshake.go`
+## 3. Lobby transport — `handshake.go`
 
 Connection setup 0xBFC8F0, reader 0xBFA950, receive/dispatch 0xBFAB90.
 
@@ -184,7 +211,7 @@ Call-site map in `d3hack/capture/nso/taskmap.txt`:
 **Publisher files** requested on connect: `Config.txt`, `Seasons.txt`,
 `Blacklist.txt`, `update-1.cpk` (absent ok), `challengerift_config.dat`
 (absent — real copies are cached by d3hack in `sd:/config/d3hack-nx/rift_data/`).
-File formats: see `d3-pubfiles/main.go`. `Seasons.txt` dates must have a 2-digit day.
+File formats: see `pubfiles.go`. `Seasons.txt` dates must have a 2-digit day.
 Results for getPublisherFile: one `bdFileData` = one blob.
 
 ---
@@ -236,3 +263,47 @@ was one search away in an open-source emulator. Check references early.
 7. Traps: Windows Firewall "Query User" block rules silently drop SYNs; Atmosphere
    hosts need a reboot; a manual IP on a DHCP adapter disables DHCP; the Claude
    classifier blocks some process launches (start `server.exe` directly, not via cmd).
+8. **Instrument inside the game first: an exlaunch module.** D3 went fast because
+   d3hack is an exlaunch module (`exefs/subsdk9` + `main.npdm`): one hooked run
+   answered what hours of guessing could not (auth `parse ret=735
+   expected_task=79`; the SendTo/RecvFrom frame walk that found the NAT prober).
+   For the next game, start with a small exlaunch logger: hook the SDK network
+   calls (nn::socket Send/Recv/SendTo/RecvFrom, nn::ssl) resolved with
+   nn::ro::LookupSymbol — the same symbols in every game — log to SD and pull
+   over FTP; then hook the game's own parser once its address is known
+   (template: d3hack `authlog.hpp`).
+9. **What to pull for decompiling:** `exefs/main` of the version actually
+   installed (base + update) holds the game code and its statically linked
+   online stack (Demonware, NEX, Pia): that is the Ghidra input. Also keep
+   `main.npdm` (title id, SDK version) and `sdk`/`subsdk*` (the nn:: SDK with
+   exported symbols, which names the imports `main` calls). Offsets change
+   between versions, so decompile the exefs the console runs. romfs only if
+   the protocol reads configs or certificates from it.
+
+---
+
+## 7. Nextendo integration (gates, presence, dashboard)
+
+Same contract as the NEX game servers (reference: `nextendo/luigis-mansion-3`).
+
+- **sni-router** owns TCP 443 for every TLS host, so each game with a TLS host
+  gets a route there (ACNH's came as a PR the same way). D3's route is
+  `demonware.net` → `BACKEND_D3` (127.0.0.1:8460), plain passthrough. The lobby
+  (TCP/UDP 3074) needs no router: DNS points straight at the server.
+- **Gates at login** (`gates.go`, before a ticket is issued): Nextendo PID from
+  the id_token's `nnex` claim (`nx2.<b64 PID.nick.expiry>.<HMAC-SHA256 "nex:"…>`),
+  signature checked when the Nextendo secret is configured
+  (`NEXTENDO_REQUIRE_SIGNED_TOKEN=1` enforces); `POST /internal/online-check
+  {pid, kind, ip}` (fail-open if unreachable). Kind: `ryujinx` when the id_token
+  has `di`/`sn` claims (Citron), else `switch`. `NEXTENDO_REQUIRE_ACCOUNT=1`
+  enforces refusals; the local `.env` uses 0 because the players' accounts live
+  on the real Nextendo, which the local nextendo-account and secret don't hold.
+  A refused login gets HTTP 403 (no ticket).
+- **Presence** (`presence.go`): every 30 s, `POST /internal/presence-batch`.
+- **Dashboard** (`dashboard.go`): `/api/stats?key=DASH_TOKEN` in the NEX servers'
+  JSON shape. Players = lobby connections with a known Nextendo player;
+  gatherings = bdMatchMaking sessions; "rmc" = remote tasks named
+  `Service::task`. nextendo-dashboard polls it as source `d3` (`DASH_D3_URL`).
+- **Firewall:** a new `server.exe` path has no Windows Firewall rule. Add allow
+  rules (elevated) before the first run, or a dismissed prompt creates a silent
+  Block rule on the Public profile (the hotspot) — see §6 item 7.
