@@ -20,6 +20,18 @@ A joiner rejects a found game instantly (and hosts its own) when one session
 attribute differs from its filter; seen once with a flag set 1 vs 0, cause
 not yet identified (both heroes were seasonal).
 
+**Co-op drops ~8 s after joining = client mods, not the server.** With d3hack on
+the console, every join succeeded (21/12 players=2) then dropped (21/12
+players=1). Cause: d3hack's `ParagonFieldWidening` widens the paragon attribute
+to 31 bits on the wire whenever `MaxParagonLevel > 20000` — gated on that value
+alone, even with `[rare_cheats] SectionEnabled = false`. A stock peer (Citron)
+misparses the player data and drops the session. Gameplay-changing patches
+(`SetBonusTierShift`, `SocketAffixSuppress`, client-side `[events]`, …) break
+co-op the same way. Online-safe d3hack config: cheat sections off AND
+`MaxParagonLevel = 20000`; community buffs come from the server's Config.txt.
+Version mismatch (2.7.6 vs 2.7.7) was NOT the problem: a hack-off 2.7.6 console
+played with 2.7.7 Citron.
+
 ---
 
 ## 1. Components
