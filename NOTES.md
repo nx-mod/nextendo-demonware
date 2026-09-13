@@ -32,6 +32,14 @@ co-op the same way. Online-safe d3hack config: cheat sections off AND
 Version mismatch (2.7.6 vs 2.7.7) was NOT the problem: a hack-off 2.7.6 console
 played with 2.7.7 Citron.
 
+**Friends: scope.** Nintendo friend lists and online presence are Nextendo's
+responsibility (console: BaaS/Penne; emulators: nextendo.network API). D3 reads
+them through nn::friends (GetFriendList, FriendPresence::GetStatus,
+IsSamePresenceGroupApplication). The D3 server only answers the Demonware side:
+12/9 getUserNames resolves friend IDs to connected players — console friends by
+Nintendo device-account ID, Citron friends by Nextendo PID. Verified both ways
+(console → xp0sed, Citron → su6ur6an). Do not rewrite presence in local proxies.
+
 **Confirmed 2026-09-13 04:37:** console (d3hack, online-safe config in
 `d3hack-online-safe.toml`) hosted; Citron (stock 2.7.7) quick-matched in via the
 NAT introduction relay; host reported 2/4 and the session held. Community buffs
