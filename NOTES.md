@@ -32,6 +32,12 @@ co-op the same way. Online-safe d3hack config: cheat sections off AND
 Version mismatch (2.7.6 vs 2.7.7) was NOT the problem: a hack-off 2.7.6 console
 played with 2.7.7 Citron.
 
+**Confirmed 2026-09-13 04:37:** console (d3hack, online-safe config in
+`d3hack-online-safe.toml`) hosted; Citron (stock 2.7.7) quick-matched in via the
+NAT introduction relay; host reported 2/4 and the session held. Community buffs
+served from Config.txt instead of the client. Friends: Citron's login lookup
+(12/9, Nextendo PID 1800011760) resolved su6ur6an as online.
+
 ---
 
 ## 1. Components
