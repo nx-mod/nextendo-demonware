@@ -86,6 +86,7 @@ func (l *lobbyConn) tryIdentity(ticket []byte) bool {
 	online[l.n] = &id
 	delete(pending, l.n)
 	onlineMu.Unlock()
+	writeOnlineFile()
 	l.logf("joueur %q pid=%d", id.Username, id.PID)
 	return true
 }
@@ -108,6 +109,36 @@ func dropOnline(conn uint64) {
 	delete(online, conn)
 	delete(pending, conn)
 	onlineMu.Unlock()
+	writeOnlineFile()
+}
+
+// writeOnlineFile publie les joueurs connectes pour la presence Nintendo : le
+// jeu compte ses amis en ligne via nn::friends (FriendPresence::GetStatus,
+// IsSamePresenceGroupApplication), pas via Demonware. baas-proxy relit ce
+// fichier et marque ces amis ONLINE dans la liste d'amis qu'il relaie.
+func writeOnlineFile() {
+	onlineMu.Lock()
+	type entry struct {
+		Username string `json:"username"`
+		PID      uint64 `json:"pid"`
+	}
+	list := make([]entry, 0, len(online))
+	for _, p := range online {
+		list = append(list, entry{p.Username, p.PID})
+	}
+	onlineMu.Unlock()
+	raw, err := json.Marshal(struct {
+		Updated int64   `json:"updated"`
+		Players []entry `json:"players"`
+	}{time.Now().Unix(), list})
+	if err != nil {
+		return
+	}
+	dir := envOr("D3_SESSIONS", "../sessions")
+	tmp := filepath.Join(dir, "online.json.tmp")
+	if os.WriteFile(tmp, raw, 0o644) == nil {
+		_ = os.Rename(tmp, filepath.Join(dir, "online.json"))
+	}
 }
 
 // refreshAliases relit les listes d'amis passees par baas-proxy (au plus une
