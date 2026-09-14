@@ -310,3 +310,17 @@ Same contract as the NEX game servers (reference: `nextendo/luigis-mansion-3`).
 - **Firewall:** a new `server.exe` path has no Windows Firewall rule. Add allow
   rules (elevated) before the first run, or a dismissed prompt creates a silent
   Block rule on the Public profile (the hotspot) — see §6 item 7.
+
+**Quick match broke after a Citron reinstall (2026-09-14 00:00-00:40), fixed without a server change.**
+Symptom: each side found the other's game (21/5 -> 1 result, sometimes a NAT INTRO) and hosted its own within a
+second. Checked and ruled out: the server (matchmaking.go and the NAT handler are code-identical to the 2026-09-13
+working build; the clean handoff copy behaves the same), the hotspot (devices ping each other), region/strictness
+and the one search value that differed (filter slot 9, Switch 1 vs Citron 0: made equal, still failed).
+Causes, in order:
+1. Reinstalling Citron wiped its **Diablo III update and DLC**. An un-updated game finds updated games and never
+   joins them. Install update 0.22.0 (v1441792) + DLC.
+2. It also wiped the per-game graphics settings (Turnip driver, GPU ASTC, normal accuracy, async shaders); with the
+   defaults the S22 ran out of memory and Android killed Citron (lmkd, ~4.5 GB RSS).
+3. A found session can be stale: its host was no longer in a joinable game (lobby connection idle since the game
+   ended). Test with the host sitting in its public game, then quick-match from the other device.
+Confirmed 00:40:04: Switch quick-matched into Citron's game, INTRO relayed, host 21/12 players=2/4.
