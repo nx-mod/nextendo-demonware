@@ -19,7 +19,7 @@ The game calls these, and the server accepts each one and returns nothing (code,
 | 27 DML | 2 | 27/2 | `getUserData` |
 | 29 user data | 5, 8, 11 | 29/11 | the rest of the user-data set (29/1 and 29/4 work) |
 | 67 event log | 6 | no | telemetry sink |
-| 68 rich presence | 3, 5, 7 | 68/3 | set and read presence text |
+| 68 rich presence | 3, 5, 7 | 68/3 | now implemented (`richpresence.go`) from the layout in the CTR pull request and our own log; unconfirmed in a live game |
 
 Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail is unavailable (log, code).
 
@@ -38,7 +38,7 @@ Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail i
 
 ## Missing: friends and presence
 
-- **Console friends depend on a local file.** Console friend names are resolved from `baas-proxy`'s log (`BAASPROXY_LOG`). That exists only in the local stack, so on a real deployment console friends would not resolve (code).
+- **Console friends.** Names come from `baas-proxy`'s log (local stack only) or, new, from nextendo-account's `/internal/resolve` (`accountlookup.go`). The account lookup is tested only against a stand-in service, never with real friend ids (code).
 - **Only online players resolve** in `getUserNames`; offline friends do not (code).
 - **The "friends online" count on devices** is still open: presence has to reach the account service that builds the console's friend list, which is private (notes).
 
