@@ -41,7 +41,7 @@ them through nn::friends (GetFriendList, FriendPresence::GetStatus,
 IsSamePresenceGroupApplication). The D3 server only answers the Demonware side:
 12/9 getUserNames resolves friend IDs to connected players — console friends by
 Nintendo device-account ID, Citron friends by Nextendo PID. Verified both ways
-(console → xp0sed, Citron → su6ur6an). Do not rewrite presence in local proxies.
+(console → player2, Citron → player1). Do not rewrite presence in local proxies.
 
 **Presence, the Nextendo way (2026-09-13).** Nextendo game servers report who is
 online to nextendo-account: `POST /internal/presence-batch {appId, status:2, pids}`
@@ -52,7 +52,7 @@ Limits: nx-account is **private** (not in the NextendoNetwork org); the console'
 friend list and account-link page come from the real Nextendo, whose presence
 intake is internal — so a locally hosted D3 server's presence only reaches devices
 that read the same nextendo-account. Local accounts also use local PIDs
-(1800000001…), not the real Nextendo PIDs.
+(1800000101…), not the real Nextendo PIDs.
 
 **Web pieces.** Local nextendo-account already implements every `/api/*` endpoint
 of NextendoNetwork/nextendo-site (incl. OAuth authorize/token/userinfo). It serves
@@ -79,7 +79,7 @@ carries (nnex claim), local or real. The blockers are on the devices:
 `d3hack-online-safe.toml`) hosted; Citron (stock 2.7.7) quick-matched in via the
 NAT introduction relay; host reported 2/4 and the session held. Community buffs
 served from Config.txt instead of the client. Friends: Citron's login lookup
-(12/9, Nextendo PID 1800011760) resolved su6ur6an as online.
+(12/9, Nextendo PID 1800000101) resolved player1 as online.
 
 ---
 
