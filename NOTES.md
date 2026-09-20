@@ -209,8 +209,11 @@ Call-site map in `d3hack/capture/nso/taskmap.txt`:
 | 68 | 3, 5, 7 | | |
 
 **Publisher files** requested on connect: `Config.txt`, `Seasons.txt`,
-`Blacklist.txt`, `update-1.cpk` (absent ok), `challengerift_config.dat`
-(absent — real copies are cached by d3hack in `sd:/config/d3hack-nx/rift_data/`).
+`Blacklist.txt`, `update-1.cpk` (absent ok). The Challenge Rift files
+(`challengerift_config.dat`, then `challengerift_<number>.dat`) are asked for when
+the Challenge Rift menu opens, per d3hack's source (UNCONFIRMED on a live game:
+the menu needs a high character level); served from `D3_RIFTDATA`, see `riftdata.go`.
+Real copies are cached by d3hack in `sd:/config/d3hack-nx/rift_data/`.
 File formats: see `pubfiles.go`. `Seasons.txt` dates must have a 2-digit day.
 Results for getPublisherFile: one `bdFileData` = one blob.
 
