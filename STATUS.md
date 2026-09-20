@@ -59,10 +59,10 @@ Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail i
 
 - **Config keys.** Whether the game reads `Config.txt` keys beyond the 26 we send. The game has its own key list; d3hack's may be shorter (guess). The parser is at `0x6429C` and `0x65314` in the binary; tracing it would settle this.
 - **Blacklist values.** What the `0`/`1` in `[GBID]` and `[SNO]` lines means (d3hack documents the line format only).
-- **Date range.** The game appears to keep dates in 32 bits (d3hack limits its rift end to 19 Jan 2038 for the same reason). A season end of 1 Jan 2050 made a seasonal hero "not a seasonal hero" on joining; it looks like the wrapped date read as a season already over, but that is inferred, not confirmed. The server now clamps any date past the limit.
+- **Date range.** The game may keep dates in 32 bits (d3hack limits its rift end to 19 Jan 2038). A season end of 1 Jan 2050 was served during the console trouble, but deleting the save fixed it on the old, unchanged files, so the date was probably not the cause. The server still clamps dates past the limit as a precaution.
 - **Season and events.**
   - Whether the game accepts season numbers below 14 or above 39, and whether older builds accept later seasons at all: builds 2.7.6 and 2.7.7 are only tested with season 37.
-  - The exact rule behind "not a seasonal hero": heroes appear to be tied to the season they were created in, so changing the served season strands them (seen on a console after serving 69, 39 and 37 in turn; not confirmed).
+  - The exact rule behind "not a seasonal hero". Seen once: after serving seasons 37, 69, 39 and 37 in turn, a console refused every new seasonal hero until its save was deleted, on files that had worked before; the server build and files were ruled out. Most likely the save records the season and a lower one is refused; not confirmed.
   - Whether `SeasonOnly` set to `0` crashes on drop: d3hack's comment says yes, its own file and ours write `0`.
   - What `ParagonCap` does.
   - How all 21 events behave together (only four have run in live co-op).
