@@ -40,7 +40,7 @@ Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail i
 
 - **Console friends.** Names come from `baas-proxy`'s log (local stack only) or, new, from nextendo-account's `/internal/resolve` (`accountlookup.go`). The account lookup is tested only against a stand-in service, never with real friend ids (code).
 - **Only online players resolve** in `getUserNames`; offline friends do not (code).
-- **The "friends online" count on devices** is still open: presence has to reach the account service that builds the console's friend list, which is private (notes).
+- **The "friends online" indicator on devices** comes from Nextendo presence, not from this server, and cannot be checked on the local stack: our report goes to a local account service the devices do not read (see README Known limits).
 
 ## Missing: hardening
 
