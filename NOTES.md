@@ -379,3 +379,25 @@ else can stay an empty success until its format is known.
 
 **Unknown until the above is done:** which task reads and which writes, whether
 leaderboards are per-season, and what a row contains.
+
+### 8a. Update from Ghidra (service-4 request shapes)
+
+Decompiled the five 4/x builders (`d3hack/capture/nso/svc4_decomp.txt`). The request
+builder is `be6520(buf, service, task, maxSize, maxBits)` — confirmed live as
+`be6520(buf, 0x1b, 2, 0x400, 0x1fffff)` for a 27/2 call.
+
+**4/11** (the one called 6x at char select) writes, after the builder init:
+`u32 count1 | count1 x u64 | u32 count2 | count2 x u32`, with a per-element category
+check on an object array. Writers seen: `bd8f70` (32-bit value) and `bd97a0`
+(64-bit value). So 4/11 is a **query** keyed by two id lists — almost certainly "give me
+the leaderboard rows for these ids / these columns".
+
+**The real blocker is the REPLY row format, not the request.** We already answer 4/11
+with an empty success and the game parses it fine — the screen just shows nothing. To
+show data we need the layout of one result row, which is on the game's *result-reader*
+side (cf. friends' reader 0xBFCE70), not the builder. That was not traced here.
+
+**Fastest path:** set `D3_DUMPS=<dir>` and open a leaderboard screen on a live session;
+the request bytes (and, once we reply with a plausible row, the game's acceptance or
+rejection) tell us the format directly. Static RE of the reader is the fallback. Until
+then, leaderboards stay an empty success — no worse than today, and safe.
