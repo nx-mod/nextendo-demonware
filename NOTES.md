@@ -13,8 +13,8 @@ updated as you go: it is the map for the next game server too.
   Open: "friends online" count on the devices (Nextendo presence must reach
   them), service 29/68/4/10-user-files real storage, stable per-account user IDs.
 - Home: `nextendo/diablo-3`, one server laid out like the other Nextendo game
-  servers (§1, §7). Until 2026-09-13 it was `switch-cfw/d3-server` with three
-  binaries (d3-auth, d3-lobby, d3-pubfiles); the git history came along.
+  servers (§1, §7). It started life as three separate binaries (d3-auth, d3-lobby,
+  d3-pubfiles); the git history came along.
 
 Join sequence observed: host 21/1 createSession → 21/2 update; joiner 21/5
 findSessions (1 result) → direct P2P connect (same LAN, no 0x0A introduction
@@ -261,8 +261,7 @@ was one search away in an open-source emulator. Check references early.
    → inner message type → service/task → typed buffer. Each layer has one
    dispatcher; find it and read its `switch`.
 7. Traps: Windows Firewall "Query User" block rules silently drop SYNs; Atmosphere
-   hosts need a reboot; a manual IP on a DHCP adapter disables DHCP; the Claude
-   classifier blocks some process launches (start `server.exe` directly, not via cmd).
+   hosts need a reboot; a manual IP on a DHCP adapter disables DHCP.
 8. **Instrument inside the game first: an exlaunch module.** D3 went fast because
    d3hack is an exlaunch module (`exefs/subsdk9` + `main.npdm`): one hooked run
    answered what hours of guessing could not (auth `parse ret=735
@@ -314,7 +313,7 @@ Same contract as the NEX game servers (reference: `nextendo/luigis-mansion-3`).
 **Quick match broke after a Citron reinstall (2026-09-14 00:00-00:40), fixed without a server change.**
 Symptom: each side found the other's game (21/5 -> 1 result, sometimes a NAT INTRO) and hosted its own within a
 second. Checked and ruled out: the server (matchmaking.go and the NAT handler are code-identical to the 2026-09-13
-working build; the clean handoff copy behaves the same), the hotspot (devices ping each other), region/strictness
+working build; a clean copy behaves the same), the hotspot (devices ping each other), region/strictness
 and the one search value that differed (filter slot 9, Switch 1 vs Citron 0: made equal, still failed).
 Causes, in order:
 1. Reinstalling Citron wiped its **Diablo III update and DLC**. An un-updated game finds updated games and never
