@@ -326,3 +326,56 @@ Causes, in order:
 3. A found session can be stale: its host was no longer in a joinable game (lobby connection idle since the game
    ended). Test with the host sitting in its public game, then quick-match from the other device.
 Confirmed 00:40:04: Switch quick-matched into Citron's game, INTRO relayed, host 21/12 players=2/4.
+---
+
+## 8. Leaderboards (service 4, bdStats) — in progress, not implemented
+
+Goal: make the in-game leaderboard screens show something instead of being empty.
+Today every service-4 task gets an empty success (`services.go`), so the game asks
+and we answer nothing.
+
+**What is known.** Five task builders exist in the game binary, addresses from
+`d3hack/capture/nso/taskmap.txt` (module base 0, so these are file offsets too):
+
+| address | task | note |
+|---|---|---|
+| `0xBE6D1C` | 4/1 | |
+| `0xBE6DDC` | 4/4 | |
+| `0xBE7044` | 4/5 | |
+| `0xBE725C` | 4/13 | |
+| `0xBE74C4` | 4/11 | called 6x at character select — the one worth doing first |
+
+No request bytes have ever been captured: the local logs only show services 10, 23,
+27 and 29 as unhandled, because nobody opened a leaderboard screen while the server
+was logging. `D3_DUMPS=<dir>` plus a session that opens the leaderboard menu would
+capture them directly and is the cheaper path if a console is available.
+
+**Where it was left.** Re-importing `capture/nso/text.bin` into the Ghidra project at
+`d3hack/capture/ghidra` (the old project's programs are gone, only the index remains),
+then decompiling the five addresses above. Command that was running:
+
+```
+analyzeHeadless <capture/ghidra> d3 -import <nso>\text.bin \
+  -processor AARCH64:LE:64:v8A -loader BinaryLoader -loader-baseAddr 0x0 \
+  -scriptPath d3hack/tools/ghidra_scripts -preScript AddNsoSegments <nso>
+```
+
+then, on the imported program:
+
+```
+analyzeHeadless <capture/ghidra> d3 -process text.bin -noanalysis \
+  -scriptPath d3hack/tools/ghidra_scripts \
+  -postScript DecompAt <out.txt> 0xBE6D1C 0xBE6DDC 0xBE7044 0xBE725C 0xBE74C4
+```
+
+**What to read out of the decompilation.** For each task: which typed values are
+pushed into the request buffer and in what order (the tag list is in section 4), and
+then the matching result reader, to learn the reply row layout. The reply is the
+usual `03 u8 | 08 u32 numResults | [08 u32 totalResults | rows...]` envelope.
+
+**Then.** Store scores per player (the account already gives a stable PID) and answer
+4/11 first, since that is the task the game actually calls on its own. Everything
+else can stay an empty success until its format is known.
+
+**Unknown until the above is done:** which task reads and which writes, whether
+leaderboards are per-season, and what a row contains.
