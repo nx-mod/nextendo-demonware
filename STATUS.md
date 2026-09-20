@@ -60,7 +60,8 @@ Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail i
 - **Config keys.** Whether the game reads `Config.txt` keys beyond the 26 we send. The game has its own key list; d3hack's may be shorter (guess). The parser is at `0x6429C` and `0x65314` in the binary; tracing it would settle this.
 - **Blacklist values.** What the `0`/`1` in `[GBID]` and `[SNO]` lines means (d3hack documents the line format only).
 - **Season and events.**
-  - Whether the game accepts season numbers below 14 or above 39, and whether older builds accept later seasons at all: builds 2.7.6 and 2.7.7 are only tested with season 37, and a 2.7.6 console refused a new character while season 39 was served (cause unconfirmed).
+  - Whether the game accepts season numbers below 14 or above 39, and whether older builds accept later seasons at all: builds 2.7.6 and 2.7.7 are only tested with season 37.
+  - The exact rule behind "not a seasonal hero": heroes appear to be tied to the season they were created in, so changing the served season strands them (seen on a console after serving 69, 39 and 37 in turn; not confirmed).
   - Whether `SeasonOnly` set to `0` crashes on drop: d3hack's comment says yes, its own file and ours write `0`.
   - What `ParagonCap` does.
   - How all 21 events behave together (only four have run in live co-op).
