@@ -118,6 +118,7 @@ Both are off or inert until you set them up. Season rotation changes the season 
 
 ## Development notes
 
+- Local development branch: protocol and reverse-engineering notes are in [NOTES.md](NOTES.md), the online-safe d3hack config in `d3hack-online-safe.toml`, and how this runs on the local stack in `../README.md`. None of these ship to Nextendo.
 - Runtime state (`sessions/`, `pubfiles/`, `dumps/`) is created next to the binary and ignored by git, as is `riftdata/`.
 - `D3_DUMPS=<dir>` records raw auth bodies and lobby frames; `D3_VERBOSE=1` logs every decrypted lobby message.
 - For co-op between a console running d3hack and a stock peer, keep d3hack's cheat sections off and set `MaxParagonLevel = 20000`. Gameplay-changing patches on one side desync the session and the game drops the join a few seconds later. Community buffs come from this server instead.
