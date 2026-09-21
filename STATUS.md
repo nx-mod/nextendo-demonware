@@ -79,3 +79,31 @@ Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail i
 1. Trace the config parser and the service-4, 10, 6 and 68 handlers in the game binary with Ghidra (the method is in `NOTES.md`). This answers the config keys and the missing formats.
 2. Add a small logger to d3hack that records service, task and arguments for every task, so the missing formats can be read from a real session.
 3. Test on a real device: the four unverified season and rift behaviors above, and a stale-session quick match.
+
+## Missing-function assessment (2026-09-20, from the Ghidra project + captured logs)
+
+Each missing service was investigated. Verdict = can it be done now, safely, without a
+console. The recurring wall: the D3 task builders are vtable-dispatched (relocated at
+load, so no static caller/reader), and requests are **bit-packed**, so reply formats are
+not readable from static decompilation alone.
+
+| service | best lead | verdict |
+|---|---|---|
+| **10 hero/account storage** | 10/10 upload decoded from a captured log: a string `"account"` then a `13` blob of 0x822 = 2082 bytes (the account save). | **Best candidate.** Store the blob opaque, keyed by (player, name), return it on the download task. No need to parse its contents. Blocked only on the download task's request/reply (10/12 or 10/13 — static decompile degraded) and a **live round-trip test**: returning wrong bytes could corrupt a hero, so it must be verified live before enabling. |
+| **4 leaderboards** | 4/11 is a bit-packed query (u32 count + u64 id list + u32 column list). | Needs a live capture of the request and iteration on the reply row format. Reader is vtable-relocated, not static. Empty reply is safe (screen just shows nothing). |
+| **6 messaging / mail** | 6/14, never seen live. | Unknown format and unknown whether anything depends on it. Needs a capture; low known priority. |
+| **23 counters** | 23/1 (u32 id, i64 delta). | Low game impact; empty success is fine. |
+| **27 DML getUserData** | 27/2, no args. | Empty reply already accepted; low impact. |
+| **29 user data** | 29/1 and 29/4 work; 29/5, 8, 11 do not. 29/11 is a paged query. | Extendable, but low impact — the working pair already covers the co-op user-data seen live. |
+| **67 event log** | 67/6, telemetry. | Empty is the *correct* behaviour: this is a telemetry sink we do not want to feed. |
+
+Non-function gaps and why they were not just done:
+- **Matchmaking session expiry**: touches the one path confirmed working live (co-op join). Aggressive expiry by `updated` could kill legitimately-open lobbies. Needs a live test, not a blind change.
+- **All-zero lobby key**: a real security fix, but it changes the handshake accept path; tighten with care and a live login test.
+- **Persistence to disk** (user data, sessions): safe and additive, but low value — state only matters within a session today.
+
+**Bottom line.** Hero/account storage is the highest-value function that is now within
+reach, and it plus leaderboards would both be resolved in a **single console session with
+`D3_DUMPS` on**: open the hero/account and leaderboard screens, capture the round-trips,
+implement against real bytes. Shipping guessed formats for either risks corrupting saves
+or crashing screens, so neither should land without that session.
