@@ -130,6 +130,18 @@ func appendVarint(b []byte, v uint64) []byte {
 // bdABTesting (bdRESTInternalResponse::deserialize -> bdRESTResponseMessage::initFromBuffer ->
 // bdRESTLSGResponseMessageDeserializer::deserialize) reads field 1. An unknown field is ignored,
 // so both can coexist; without field 1 initFromBuffer fails and sets error 4.
+// structReply builds a bdStructBufferTask reply: transaction, error and task, then the
+// message as a bdStructBuffer — no result-count fields (deserializeTaskReply reads the
+// struct directly; a count would fail it with error 4). Used by protobuf services.
+func structReply(task byte, msg []byte) []byte {
+	w := &bdWriter{}
+	w.u64(transactions.Add(1))
+	w.u32(0)
+	w.u8(task)
+	w.structv(msg)
+	return w.b
+}
+
 func httpProxyReply(task byte, status uint32, body []byte) []byte {
 	sb := appendVarint([]byte{0x08}, uint64(status))
 	sb = appendVarint(append(sb, 0x10), uint64(status))
@@ -304,6 +316,9 @@ func (l *lobbyConn) onTask(payload []byte) {
 			l.logf("CTR matchmaking unimplemented task=%d context=%q", task, ctx)
 			reply = taskReply(task, errUnhandled, nil)
 		}
+	case service == svcStats:
+		reply = l.onStats(task, r)
+
 	case service == svcRichPresence:
 		reply = l.onRichPresence(task, r)
 
