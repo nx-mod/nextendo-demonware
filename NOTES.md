@@ -463,3 +463,36 @@ each result is a `13` blob of a serialized `Score`, or the whole reply is one bl
 `LeaderboardScores`. The reply envelope is the usual `u8 | u32 count | u32 total | results`
 (taskReply). Build a minimal Score, wrap it, return it for a 4/4 board read, and see if
 the board shows one entry.
+
+### 8d. Reply-format RE: how far static analysis gets, and the wall (2026-09-22)
+
+Goal: the per-entry reply format for leaderboards (and by extension 29/11 account data,
+mail). Established:
+
+- **Reply envelope** (generic result reader `FUN_00c005b0`): reads `numResults`, then
+  `total`, then loops calling each result object's `vtable[0x10]` deserializer. So the
+  counted envelope is right (taskReply), and each entry is parsed by a per-result reader.
+- **Leaderboard entry is protobuf** `D3.Leaderboard.LeaderboardScores`/`Score` (schema in
+  `d3hack/capture/nso/protos/`). Four live wire-format guesses (blob/struct, bare/wrapped,
+  with/without count) were all rejected — the per-result reader wants a specific shape.
+- **The per-result reader cannot be pinned statically.** Task serialize/deserialize
+  pointers are set at runtime (AArch64 relocation), so: no static pointers to the 4/x
+  builders exist in rodata/data; the builders have no direct callers (vtable dispatch);
+  the `GreaterRiftsLeaderboard%d` string xrefs are UI-label formatters, not the network
+  path; and the d3hack logs never captured a real leaderboard reply.
+
+**29/11 (account data on login):** `ctx | offset | limit(30,5) | u16[] categories 700/701`.
+The game QUERIES this on login and never writes (29/1) — so categories 700/701 are
+server-authoritative account records the game expects us to hold. We return empty ("no
+account data"), which is likely why nothing further (incl. any restore) is triggered.
+Its reply record format is unknown for the same reason.
+
+**Save restore:** on a save-less login the game issues NO bdStorage download (10/12) and
+there are no cloud/restore code paths for bdStorage in the binary. D3 console keeps the
+LOCAL save authoritative; the 10/10 upload is a one-way backup. Save restore on Switch is
+Nintendo's NSO cloud-save, not our server.
+
+**Definitive next method:** dynamic analysis — a d3hack (exlaunch) hook on the per-result
+reader / protobuf parse, logging the bytes the game accepts. This is how the protocol was
+originally mapped; static RE of this stripped, relocated binary has reached its limit for
+reply formats.
