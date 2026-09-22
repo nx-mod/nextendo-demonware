@@ -316,6 +316,9 @@ func (l *lobbyConn) onTask(payload []byte) {
 			l.logf("CTR matchmaking unimplemented task=%d context=%q", task, ctx)
 			reply = taskReply(task, errUnhandled, nil)
 		}
+	case service == svcStorage && (task == 10 || task == 12 || task == 13):
+		reply = l.onStorageUser(task, r)
+
 	case service == svcStats:
 		reply = l.onStats(task, r)
 

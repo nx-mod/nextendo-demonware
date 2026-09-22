@@ -27,3 +27,5 @@ stdout.txt
 *.err
 /riftdata/
 /pubfiles.local.json
+
+/userfiles/
