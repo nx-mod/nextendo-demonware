@@ -401,3 +401,31 @@ side (cf. friends' reader 0xBFCE70), not the builder. That was not traced here.
 the request bytes (and, once we reply with a plausible row, the game's acceptance or
 rejection) tell us the format directly. Static RE of the reader is the fallback. Until
 then, leaderboards stay an empty success — no worse than today, and safe.
+
+### 8b. Leaderboards: requests SOLVED, reply is protobuf (live capture 2026-09-21)
+
+Captured a full live session (console cycling all boards). The **request format is
+solved** — plain typed bdByteBuffer, not bit-packed as feared:
+
+- envelope: `<service u8=04> 03 <task>` then typed args.
+- **4/11** (char select, x6): `08 u32=1 | 0A u64 timestamp | 08 u32 count | count x (08 u32 boardID)`.
+  Fetches definitions for ~20 board IDs at once.
+- **4/4, 4/5, 4/13** (fire when a board is opened/cycled): `08 u32 boardID | 0A u64 (1 or timestamp) | 08 u32 pageSize(=0x23=35) | 08 u32 offset(=0)`.
+  The three tasks are the three view types (friends / my position / top global).
+- board IDs seen: 0x186A1=100001, 0x186C1, 0x18705=100101 ... 0x1ADBA=110010, etc.
+  (challenges / greater rifts per class + 2/3/4-player / conquests).
+
+**The reply is PROTOBUF.** The game embeds `Leaderboard.proto` and `.D3.Hero.Loadout` /
+`.D3.Hero.LoadoutPotion` message types: each leaderboard entry carries a full hero
+snapshot (gear, skills, potion) — that is what the in-game "inspect" on a leaderboard
+entry shows. So a populated reply is not a simple typed row; it is a protobuf message per
+entry. Returning an empty result (current behaviour) is accepted and the board shows its
+empty / "recently updated" state — safe.
+
+**To populate boards** we would need to reconstruct the `.D3.*` `Leaderboard.proto`
+schema (the descriptor may be embedded in the binary near the `Leaderboard.proto`
+strings; four occurrences) and generate valid hero-snapshot messages. That is a
+substantial RE + protobuf-authoring task, not a quick trial reply. Blind-guessing a
+protobuf message is near-hopeless and each test needs a server restart + the player
+reopening a board, so it should be done from the reconstructed schema, offline, before
+any live test.
