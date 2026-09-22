@@ -429,3 +429,37 @@ substantial RE + protobuf-authoring task, not a quick trial reply. Blind-guessin
 protobuf message is near-hopeless and each test needs a server restart + the player
 reopening a board, so it should be done from the reconstructed schema, offline, before
 any live test.
+
+### 8c. Leaderboard reply schema RECOVERED (Leaderboard.proto, 2026-09-21)
+
+The game embeds the full `FileDescriptorProto` in rodata (offset 0x252804 in the 22.5.0
+dump). Extracted with `d3hack/capture/nso/extract_proto.py` -> `capture/nso/Leaderboard.proto`.
+Package `D3.Leaderboard`. Key messages for the reply:
+
+    Score {                                 // one leaderboard entry
+      required uint64  leaderboard_id = 1;
+      required uint32  scope_id       = 2;
+      required fixed64 score          = 3;
+      required fixed64 timestamp      = 4;
+      optional Metadata metadata      = 5;  // team_member[] -> hero name/class/clan/snapshot
+      optional uint64  game_account_id= 6;
+      optional uint32  score_band     = 7;
+      optional uint32  score_player_count = 8;
+    }
+    LeaderboardScores { repeated Score scores = 1; }
+    Metadata { bool cheated; repeated Member team_member=10; act_N_time_ms; level_seed; WeeklyChallengeData; }
+    Member { uint64 account_id; string hero_name; fixed32 hero_gbid_class; uint32 hero_level;
+             string clan_name/clan_tag; string battle_tag; HeroSnapshot hero_snapshot; ... }
+    HeroSnapshot { active_skills; equipped_items[]; active_traits; paragon; hero_id; cosmetics; legendary_powers[] }
+
+**Why this matters:** only `leaderboard_id, scope_id, score, timestamp` are REQUIRED in a
+Score. Metadata/Member/HeroSnapshot are optional, so a minimal populated entry (rank +
+score, and a name via Member.hero_name/battle_tag) can be built WITHOUT the full hero
+snapshot. The inspect-a-hero view needs HeroSnapshot, but a basic board does not.
+
+**Still to determine (needs one live trial, now low-risk with the schema in hand):**
+how the Score/LeaderboardScores is wrapped in the Demonware task reply — i.e. whether
+each result is a `13` blob of a serialized `Score`, or the whole reply is one blob of
+`LeaderboardScores`. The reply envelope is the usual `u8 | u32 count | u32 total | results`
+(taskReply). Build a minimal Score, wrap it, return it for a 4/4 board read, and see if
+the board shows one entry.
