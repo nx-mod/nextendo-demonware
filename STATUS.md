@@ -107,3 +107,34 @@ reach, and it plus leaderboards would both be resolved in a **single console ses
 `D3_DUMPS` on**: open the hero/account and leaderboard screens, capture the round-trips,
 implement against real bytes. Shipping guessed formats for either risks corrupting saves
 or crashing screens, so neither should land without that session.
+
+## The full online feature surface (from embedded protobuf descriptors, 2026-09-21)
+
+The game binary embeds a `FileDescriptorProto` for every `.proto` it uses. All 24 were
+extracted (`d3hack/capture/nso/protos/`, gitignored). This is the complete map of what a
+full server could implement — and confirms we handle only a fraction.
+
+| proto (messages) | Demonware service | feature | our status |
+|---|---|---|---|
+| Leaderboard (19) | 4 bdStats | leaderboards (Score + hero snapshots) | schema recovered; reply-wrapping TBD |
+| ConsoleMail (4) | 6 messaging | in-game **mail**: item gifts, gold, avenger mail | EMPTY — missing |
+| GameMessage (153) | 6 / lobby | the big in-game command/message protocol (chat, party, game state, notifications) | EMPTY — missing, large |
+| PartyMessage (6) | 6 | party messages | EMPTY — missing |
+| Account (18) | 10 bdStorage | **account save** (Digest: banner, unlocks, paragon, feats) — the 10/10 upload | DISCARDED — missing |
+| Hero (9) / HeroCommon (19) | 10 bdStorage | **hero save** data | DISCARDED — missing |
+| Achievements (8) / AchievementsStaticData (7) | (storage/dedicated) | **achievements** sync + awards | not stored — missing |
+| Profile (17) | 29 user data | profile: skills, paragon, banner | partial (29/1,4 blob only) |
+| Settings (6) | 29 user data | settings sync | partial |
+| Guild (27) | (dedicated) | **clans/guilds** | not handled — missing |
+| ChallengeRifts (2) | 10 pubfile | challenge rift definition | we serve rift files (partial) |
+| Items (13) / ItemCrafting (3) / CosmeticItems (3) / Hireling (2) / Quest (3) / GameBalance (2) / AttributeSerializer (2) | — | data types embedded in the above | n/a |
+| OnlineService (16) | — | core id types: EntityId, GameAccountHandle | used by all |
+| CS (15) | — | customer-service messages | n/a for us |
+| AccountMigration (21) | — | account migration | n/a |
+| Console (5) | — | console-specific wrappers | n/a |
+
+**So beyond leaderboards and news, the real missing server features are:** in-game mail
+(ConsoleMail, svc 6), hero/account persistence (Account+Hero, svc 10 — banner, unlocks,
+paragon currently thrown away every login), achievements, clans (Guild), and the large
+GameMessage protocol. Each now has a recovered schema to build against. All are protobuf,
+so the pattern is the same as leaderboards: build the message, wrap it in the task reply.
