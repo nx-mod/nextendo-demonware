@@ -1,0 +1,120 @@
+{
+  "//": "Nextendo Network — catalog of games the network serves. Routing keys (NEX secure-server id, Demonware/EOS/BCAT type) are authoritative and taken from the server configs and the DNS.mitm host list. Access keys and NEX versions are the values the dedicated servers run with. title_id is included only where confirmed. See NETWORK_AUDIT.md and GAPS.md.",
+  "updated": "2026-09-27",
+  "games": [
+    {
+      "name": "Mario Kart 8 Deluxe",
+      "type": "nex",
+      "secure_server": "g2b309e01-lp1.s.n.srv.nintendo.net",
+      "server": "routed-to-production",
+      "note": "host redirect only; MK8 host points at the production box (players are there), not a dedicated repo server. Needs a distinct nncs2 IP or NAT fails (2618-201)."
+    },
+    {
+      "name": "Super Smash Bros. Ultimate",
+      "type": "nex",
+      "secure_server": "g23380901-lp1.s.n.srv.nintendo.net",
+      "server": "super-smash-bros-ultimate",
+      "access_key": "9587602b",
+      "nex_version": 40400,
+      "secure_port": 60016,
+      "title_id": "01006A800016E000"
+    },
+    {
+      "name": "Advance Wars 1+2: Re-Boot Camp",
+      "type": "nex",
+      "secure_server": "g2*-lp1.s.n.srv.nintendo.net (wildcard)",
+      "server": "advance-wars",
+      "access_key": "c001f85f",
+      "nex_version": 40604,
+      "secure_port": 60015
+    },
+    {
+      "name": "Borderlands: Game of the Year Edition",
+      "type": "nex",
+      "server": "borderlands-1",
+      "access_key": "018165a5",
+      "nex_version": 40000,
+      "secure_port": 60012
+    },
+    {
+      "name": "Torchlight II",
+      "type": "nex",
+      "server": "torchlight-2",
+      "access_key": "ebf6d32e",
+      "nex_version": 40000,
+      "secure_port": 60014
+    },
+    {
+      "name": "Animal Crossing: New Horizons",
+      "type": "nex",
+      "secure_server": "g2ee2e300-lp1.s.n.srv.nintendo.net",
+      "server": "routed",
+      "note": "host redirect present; no dedicated repo server yet."
+    },
+    {
+      "name": "Mario Strikers: Battle League",
+      "type": "nex",
+      "secure_server": "g26cfaf00-lp1.s.n.srv.nintendo.net",
+      "server": "routed"
+    },
+    {
+      "name": "Luigi's Mansion 3",
+      "type": "nex",
+      "secure_server": "g20de2100-lp1.s.n.srv.nintendo.net",
+      "server": "routed"
+    },
+    {
+      "name": "Mario Tennis Aces",
+      "type": "nex",
+      "secure_server": "g23932a00-lp1.s.n.srv.nintendo.net",
+      "server": "routed"
+    },
+    {
+      "name": "ARMS",
+      "type": "nex",
+      "secure_server": "g25c08801-lp1.s.n.srv.nintendo.net",
+      "server": "routed"
+    },
+    {
+      "name": "Splatoon 2",
+      "type": "nex+bcat",
+      "secure_server": "g2df33d01-lp1.s.n.srv.nintendo.net",
+      "server": "routed",
+      "bcat": "nextendo-bcat-nx"
+    },
+    {
+      "name": "Splatoon 3",
+      "type": "npln+bcat",
+      "hosts": ["*.npln.nintendo.net", "gamesync.npln.nintendo.net", "dragons.hac.lp1.dragons.nintendo.net"],
+      "server": "routed",
+      "bcat": "nextendo-bcat-nx",
+      "note": "NPLN (gRPC/HTTP2), not NEX. Needs cert exefs patches (BoringSSL)."
+    },
+    {
+      "name": "Diablo III: Eternal Collection",
+      "type": "demonware",
+      "server": "nextendo-demonware",
+      "title_id": "01001B300B9BE000"
+    },
+    {
+      "name": "Crash Team Racing: Nitro-Fueled",
+      "type": "demonware",
+      "server": "nextendo-demonware",
+      "hosts": ["*.demonware.net"],
+      "note": "also needs dwctrfriendlookup / dwctrtrustcertbypass exefs patches."
+    },
+    {
+      "name": "Fall Guys",
+      "type": "eos",
+      "server": "nextendo-eos-nx",
+      "branch": "fall-guys"
+    },
+    {
+      "name": "Super Mario Bros. 35",
+      "type": "bcat",
+      "server": "nextendo-bcat-nx",
+      "title_id": "0100277011F1A000",
+      "note": "event data via BCAT; the Special Battle exefs patch REPLACES the normal 35-battle."
+    }
+  ]
+}
