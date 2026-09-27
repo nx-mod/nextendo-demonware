@@ -136,9 +136,9 @@ What this server does not do, and what has not been checked. Read this before re
 
 **Persistence (`testing` branch).** User data, hero uploads, counters, mail and leaderboards are kept on disk under `D3_STATE` (default `state/`, `off` for memory only) and survive a restart. Public games stay in memory by design.
 
-**Matchmaking.** Games never expire (one whose host went away stays findable until it disconnects), search filters are ignored, and play is peer to peer only.
+**Matchmaking.** On the `testing` branch, abandoned games expire (`D3_SESSION_TTL`, default 900 s) and full games are hidden from search, so a stale or full game is no longer handed to a joiner. Search filters are still ignored (the per-attribute format is not captured) and play is peer to peer only.
 
-**Security.** The lobby also accepts a fixed all-zero key, so a client with no ticket can complete the handshake. There is no rate limiting or moderation beyond the account gate (`NEXTENDO_REQUIRE_ACCOUNT`).
+**Security.** `NEXTENDO_REQUIRE_TICKET=1` (`testing` branch) refuses the all-zero handshake key, so a client with no ticket cannot log in unidentified; it is off by default for older tickets. There is no rate limiting (the client re-authenticates in a loop, so a naive per-IP limit would block legitimate reconnects) or moderation beyond the account gate (`NEXTENDO_REQUIRE_ACCOUNT`).
 
 **Seasons.** Only season 37 is tested, on game builds 2.7.6 and 2.7.7. Changing the served season, up or down, can damage a savegame (see [PUBFILES.md](PUBFILES.md#settings)). Season rotation and Challenge Rifts have not been tried on a running game.
 
@@ -148,9 +148,9 @@ What this server does not do, and what has not been checked. Read this before re
 
 - Leaderboards, stats and hero storage: storage and the Blizzard-API-shaped model are framed on the `testing` branch; capture the bdStats/bdStorage request and reply layouts from a live session, then enable `D3_FRAMED_REPLIES` and adjust the row writers to finish them end-to-end.
 - Persist public games and friend status (user data, hero files, counters, mail and leaderboards are persisted on the `testing` branch).
-- Expire stale games and honor the search filters.
-- Refuse the all-zero lobby key; add rate limits.
-- Check console friends, friend status and the "friends online" indicator against real accounts on a real deployment.
+- Honor the search filters (stale/full games are already skipped on the `testing` branch; the per-attribute filter format still needs a capture). Add rate limits carefully (the client reconnects in a loop).
+- Stable per-account Demonware user id in the Diablo III ticket: the ticket still carries user id 1 at +17 (CTR already uses the PID). Needs on-device testing before changing the tested login path — see NOTES.md.
+- Check console friends, friend status and the "friends online" indicator against real accounts on a real deployment (rich presence now resolves console friend ids on the `testing` branch, still unconfirmed live).
 - Try Challenge Rifts and season rotation on a running game.
 - Translate the French comments and log strings left in `ctr_*.go` and `lobbydoc.go`.
 - Let rich presence resolve a console friend id to a PID, as friend lookups already do (`onlinePlayerFor`).

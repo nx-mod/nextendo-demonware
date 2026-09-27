@@ -140,6 +140,17 @@ Ticket layout (parse_ticket 0xBFCF30):
 auth.go fills +97 with session_key[0:24] and sends the same bytes as server
 ticket. The lobby recovers the key from the ticket echoed back in 0x82.
 
+**Ticket user id (+17) is still a placeholder `1` for Diablo III** (CTR/5775
+already puts the PID there). The lobby recovers the player from the session file
+keyed by the ticket's 8-byte session-key prefix, not from +17, so identity works
+regardless; but if the game uses +17 as its own Demonware account id, every
+player currently shares id 1, which could collide per-account game state. Using
+the PID at +17 for 5745 (one line in auth.go, mirroring the 5775 branch) is the
+likely fix and is plausibly safe since 5775 already does it — but it changes the
+tested login path, so it needs one on-device confirmation (login still succeeds,
+matchmaking still works) before flipping. Left unchanged deliberately: do not
+guess the login path.
+
 ---
 
 ## 3. Lobby transport — `handshake.go`

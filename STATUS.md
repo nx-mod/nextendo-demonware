@@ -42,10 +42,10 @@ visible on the dashboard, so nothing is lost while the capture is pending.
 - **No stable user IDs.** Every ticket carries user id 1, and the lobby connection id is a counter (code). Stable per-account IDs are still open in the notes.
 - **No real subscription check.** `nso_subscription_status` is always `1` (code).
 
-## Missing: matchmaking
+## Matchmaking
 
-- **No session expiry.** `updated` is recorded and never read, so a session lives until its host disconnects. A stale host can be found and never joined (code; this matches a failure seen live, see Unknowns).
-- **Search filters are ignored.** `findSessions` reads only query, start and max, and returns every other player's session, up to 50 (code).
+- **Session expiry — done (`testing` branch).** `updated` is now read: a session whose host stays connected but stops touching it is expired after `D3_SESSION_TTL` (default 900 s, 0 disables), both in the reaper and at read time. This is the documented stale-quick-match failure. Full games (`numPlayers >= maxPlayers`) are also skipped in find/friend results, so a searcher is never handed a game it cannot join (`matchmaking.go`).
+- **Search filters are still ignored.** `findSessions` reads only query, start and max, and returns every other joinable session, up to 50. The per-attribute filter format is client-specific and not captured, so honouring it is left for a capture (code).
 - **No player list per session, no region or skill logic** (code).
 - **Peer-to-peer only.** The server introduces players and relays nothing of the game itself (code).
 
@@ -54,10 +54,11 @@ visible on the dashboard, so nothing is lost while the capture is pending.
 - **Console friends.** Names come from `baas-proxy`'s log (local stack only) or, new, from nextendo-account's `/internal/resolve` (`accountlookup.go`). The account lookup is tested only against a stand-in service, never with real friend ids (code).
 - **Only online players resolve** in `getUserNames`; offline friends do not (code).
 - **The "friends online" count on devices** is still open: presence has to reach the account service that builds the console's friend list, which is private (notes).
+- **Rich presence now resolves console friend ids (`testing` branch).** `getAndSubscribeRichPresence` (68/5) resolved friends only by raw PID; it now resolves a console's Nintendo device id to a PID via `onlinePlayerFor`, the same path the friend name lookup uses, and keys the reply row by the id the game asked about (`ctr_presence.go`). Still unconfirmed in a live Diablo III game.
 
 ## Missing: hardening
 
-- **The lobby accepts an all-zero key.** It tries recent tickets and an all-zero key for older ones, and anyone can derive the zero key. A client with no ticket can therefore complete the handshake, unidentified, and call tasks such as matchmaking (code).
+- **The all-zero lobby key can now be refused (`testing` branch).** `NEXTENDO_REQUIRE_TICKET=1` drops the zero key from the handshake candidates, so a client with no ticket cannot complete the handshake unidentified. Off by default because older tickets whose lobby-key field is null legitimately need the zero key; turn it on once every client issues a modern ticket (`handshake.go`).
 - **No rate limits, no bans or moderation, no anti-abuse** (code).
 - **Account gates fail open** when the account service is unreachable, by design; `NEXTENDO_REQUIRE_ACCOUNT` defaults to off (code).
 - **IPv4 only** for NAT (code).

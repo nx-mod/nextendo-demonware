@@ -60,6 +60,31 @@ type mmSession struct {
 // survivre a la reconnexion de son hote pour rester joignable.
 const orphanGrace = 2 * time.Minute
 
+// sessionTTL expires a session whose host is still connected but has stopped
+// touching it (create/update/updatePlayers/initialize all refresh `updated`).
+// This is the documented "stale session" quick-match failure: a host whose game
+// has ended stays findable, and a joiner rejects it. D3_SESSION_TTL sets the
+// window in seconds; 0 disables the sweep (the old behaviour). The default is
+// generous so an active game that heartbeats is never dropped, while an
+// abandoned one clears within the window.
+var sessionTTL = time.Duration(envOrInt("D3_SESSION_TTL", 900)) * time.Second
+
+// stale reports whether a session has gone silent past sessionTTL.
+func (s *mmSession) stale(now time.Time) bool {
+	return sessionTTL > 0 && s.owner != 0 && now.Sub(s.updated) > sessionTTL
+}
+
+// full reports whether a session already has every slot filled, so it should
+// not be offered to a searcher who could never join it.
+func (s *mmSession) full() bool {
+	return s.maxPlayers > 0 && s.numPlayers >= s.maxPlayers
+}
+
+// joinable reports whether a session should appear in find/friend results.
+func (s *mmSession) joinable(now time.Time) bool {
+	return !s.reserved && !s.full() && !s.stale(now)
+}
+
 func (l *lobbyConn) pid() uint64 {
 	if l.player == nil {
 		return 0
@@ -83,11 +108,15 @@ func reapSessions() {
 }
 
 func reapSessionsOnce() {
+	now := time.Now()
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 	for id, s := range sessions {
-		if s.owner == 0 && time.Since(s.orphaned) > orphanGrace {
-			delete(sessions, id)
+		switch {
+		case s.owner == 0 && now.Sub(s.orphaned) > orphanGrace:
+			delete(sessions, id) // host gone and did not come back
+		case s.stale(now):
+			delete(sessions, id) // host connected but the game went silent
 		}
 	}
 }
@@ -211,9 +240,10 @@ func (l *lobbyConn) onFriendSessions(task byte, r *bdReader, context string) []b
 		if pid == me {
 			continue
 		}
+		now := time.Now()
 		sessionsMu.Lock()
 		for _, s := range sessions {
-			if s.ownerPID == pid && s.context == context && !s.reserved && !seen[s.id] {
+			if s.ownerPID == pid && s.context == context && s.joinable(now) && !seen[s.id] {
 				seen[s.id] = true
 				copy := *s
 				found = append(found, hit{id, &copy})
@@ -362,10 +392,11 @@ func (l *lobbyConn) onMatchMakingContext(task byte, r *bdReader, context string)
 		if maxr == 0 || maxr > 50 {
 			maxr = 50
 		}
+		now := time.Now()
 		sessionsMu.Lock()
 		found := make([]*mmSession, 0, len(sessions))
 		for _, s := range sessions {
-			if !l.owns(s) && s.context == context && !s.reserved {
+			if !l.owns(s) && s.context == context && s.joinable(now) {
 				found = append(found, s)
 			}
 		}

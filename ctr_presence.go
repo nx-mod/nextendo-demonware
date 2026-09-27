@@ -105,6 +105,28 @@ func (l *lobbyConn) onRichPresence(task byte, r *bdReader) []byte {
 	case rpGet, rpGetAndSubscribe:
 		ids := r.accountIDs()
 		me := l.pid()
+		// Resolve each asked id to a connected player's PID first: a Citron
+		// friend id IS the PID, but a console friend id is a Nintendo device id,
+		// resolved via the alias log or nextendo-account exactly as the friend
+		// lookups do (onlinePlayerFor). Done before taking richMu because
+		// resolution can touch the account service. The reply row is keyed by
+		// the id the game asked about, so it still ties the presence to the
+		// friend the game knows.
+		type ask struct{ asked, pid uint64 }
+		resolved := make([]ask, 0, len(ids))
+		for _, a := range ids {
+			if a.id == 0 {
+				if me != 0 {
+					resolved = append(resolved, ask{me, me})
+				}
+				continue
+			}
+			pid := a.id
+			if p := onlinePlayerFor(a.id); p != nil {
+				pid = p.PID
+			}
+			resolved = append(resolved, ask{a.id, pid})
+		}
 		live := onlinePIDSet()
 		type hit struct {
 			id uint64
@@ -112,18 +134,14 @@ func (l *lobbyConn) onRichPresence(task byte, r *bdReader) []byte {
 		}
 		var hits []hit
 		richMu.Lock()
-		for _, a := range ids {
-			id := a.id
-			if id == 0 {
-				id = me
-			}
+		for _, a := range resolved {
 			// Une presence gardee pour un joueur parti ferait croire a une
 			// partie joignable qui n'existe plus.
-			if id != me && !live[id] {
+			if a.pid != me && !live[a.pid] {
 				continue
 			}
-			if p, ok := rich[id]; ok {
-				hits = append(hits, hit{id, p})
+			if p, ok := rich[a.pid]; ok {
+				hits = append(hits, hit{a.asked, p})
 			}
 		}
 		richMu.Unlock()

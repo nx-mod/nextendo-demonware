@@ -310,7 +310,9 @@ func (l *lobbyConn) candidates(raw []byte) []keyCand {
 			}
 		}
 	}
-	out = append(out, keyCand{"zero", make([]byte, 24)})
+	if !requireTicket {
+		out = append(out, keyCand{"zero", make([]byte, 24)})
+	}
 	return out
 }
 
@@ -418,6 +420,15 @@ func (l *lobbyConn) onEncrypted(raw []byte) {
 const migratePort uint16 = 3074
 
 var migrateEnabled = os.Getenv("CTR_MIGRATE") == "1"
+
+// requireTicket, when set, drops the all-zero key from the handshake candidates
+// (candidates()). Without it a client that presents no ticket can still match
+// the zero key and complete the handshake unidentified, then call tasks such as
+// matchmaking. Off by default because older tickets whose lobby-key field was
+// null legitimately need the zero key; turn it on once every client issues a
+// modern ticket. A refused handshake leaves the connection silent, as an
+// unmatched key already does.
+var requireTicket = os.Getenv("NEXTENDO_REQUIRE_TICKET") == "1"
 
 func migrateIP() net.IP {
 	ip := net.ParseIP(nextendoHost).To4()
