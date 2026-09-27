@@ -81,7 +81,7 @@ These steps follow the generic [deployment guide](https://github.com/NextendoNet
 | 8460 TCP (TLS) | Demonware auth, behind sni-router |
 | 3074 TCP | lobby (`LOBBY_PORTS` also opens 3075 to 3080) |
 | 3074 UDP | NAT discovery and introductions |
-| 8093 HTTP | `/api/stats?key=DASH_TOKEN`, `/healthz`, `/pubfiles/` |
+| 8093 HTTP | `/api/stats?key=DASH_TOKEN`, `/api/leaderboards[/<board>]?key=…` (Blizzard-API shape), `/healthz`, `/pubfiles/` |
 
 ## Publisher files
 
@@ -132,9 +132,9 @@ What this server does not do, and what has not been checked. Read this before re
 - **The in-game "friends online" indicator does not come from this server.** It comes from Nintendo friend presence (`nn::friends`), which Nextendo supplies. This server reports who is connected to nextendo-account (`/internal/presence-batch`); the devices read presence from the account service of their deployment. On a local test stack with real Nextendo accounts the two never meet: the local account service does not know those accounts and the devices do not ask it, so no friend has ever been seen shown as online, on either device. The server's answer to the friend lookup was checked in the log (the game was told the friend was online) and the game still showed nobody. Checking the indicator needs a deployment where the account service that receives this server's report is the one the devices ask.
 - Friend status (rich presence) uses CollectingW's `ctr_presence.go`, whose layout matches what Diablo III sends in our logs. It looks a friend up by the raw id the game asks about, so it matches a Citron PID but not yet a console's Nintendo id. It has not been seen working in a live Diablo III game.
 
-**Empty services.** The game asks for leaderboards and stats, hero upload, mail, counters and event logging, and the server accepts each request and answers with nothing. Leaderboard screens are empty and uploaded heroes are not stored.
+**Empty services (being framed on the `testing` branch).** The game asks for leaderboards and stats, hero upload, mail, counters and event logging. `main` answered each with nothing. The `testing` branch now **stores** these — scores per leaderboard (shaped after Blizzard's own Diablo III Game Data API and served on the dashboard's `/api/leaderboards`), uploaded hero blobs, counters and mail — and frames a reply for each. The typed reply for the tasks whose Switch wire layout is not captured yet is off by default (`D3_FRAMED_REPLIES=1` turns it on for a capture session); until then the game still sees empty leaderboards, but nothing is lost. See [STATUS.md](STATUS.md).
 
-**No persistence.** Public games, user data and friend status live in memory and are lost on restart.
+**Persistence (`testing` branch).** User data, hero uploads, counters, mail and leaderboards are kept on disk under `D3_STATE` (default `state/`, `off` for memory only) and survive a restart. Public games stay in memory by design.
 
 **Matchmaking.** Games never expire (one whose host went away stays findable until it disconnects), search filters are ignored, and play is peer to peer only.
 
@@ -146,8 +146,8 @@ What this server does not do, and what has not been checked. Read this before re
 
 ## To do
 
-- Leaderboards, stats and hero storage: read the request formats from the game and add storage.
-- Persist public games, user data and friend status.
+- Leaderboards, stats and hero storage: storage and the Blizzard-API-shaped model are framed on the `testing` branch; capture the bdStats/bdStorage request and reply layouts from a live session, then enable `D3_FRAMED_REPLIES` and adjust the row writers to finish them end-to-end.
+- Persist public games and friend status (user data, hero files, counters, mail and leaderboards are persisted on the `testing` branch).
 - Expire stale games and honor the search filters.
 - Refuse the all-zero lobby key; add rate limits.
 - Check console friends, friend status and the "friends online" indicator against real accounts on a real deployment.

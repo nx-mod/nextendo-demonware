@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +42,9 @@ var (
 	onlineMu sync.Mutex
 	online   = map[uint64]*playerID{} // connection number -> player
 
-	userDataMu sync.Mutex
-	userData   = map[string][]byte{} // nickname|context -> 29/1 blob
+	// userData is persisted (userdata.json), keyed "nickname|context" -> 29/1
+	// blob, so per-player data survives a restart.
+	userData = newDiskMap[[]byte]("userdata")
 
 	aliasMu     sync.Mutex
 	aliases     = map[uint64]string{} // device/NSA identifier -> nickname
@@ -283,19 +285,21 @@ func (l *lobbyConn) onGetUserNames(task byte, r *bdReader) []byte {
 	})
 }
 
-// onUserData: service 29. 1 = write own data, 4 = read a list's.
+// onUserData: service 29. 1 = write own data, 4 = read a list's, 11 = paged
+// query of a context. Tasks 5 and 8 are seen in the binary but their layout is
+// not captured; they fall through to an empty success in services.go.
 func (l *lobbyConn) onUserData(task byte, r *bdReader) []byte {
 	ctx, _ := r.str()
 	switch task {
+	case 11:
+		return l.onUserDataQuery(task, ctx, r)
 	case 1:
 		data, err := r.blob()
 		if err != nil || l.player == nil {
 			l.logf("userdata SET ctx=%q ignored (%v, player=%v)", ctx, err, l.player != nil)
 			return taskReply(task, 0, nil)
 		}
-		userDataMu.Lock()
-		userData[strings.ToLower(l.player.Username)+"|"+ctx] = data
-		userDataMu.Unlock()
+		userData.set(strings.ToLower(l.player.Username)+"|"+ctx, data)
 		l.logf("userdata SET %s ctx=%q %d bytes", l.player.Username, ctx, len(data))
 		return taskReply(task, 0, nil)
 	case 4:
@@ -313,10 +317,7 @@ func (l *lobbyConn) onUserData(task byte, r *bdReader) []byte {
 			if name == "" {
 				continue
 			}
-			userDataMu.Lock()
-			d, ok := userData[strings.ToLower(name)+"|"+ctx]
-			userDataMu.Unlock()
-			if ok {
+			if d, ok := userData.get(strings.ToLower(name) + "|" + ctx); ok {
 				hits = append(hits, hit{id, d})
 			}
 		}
@@ -330,6 +331,54 @@ func (l *lobbyConn) onUserData(task byte, r *bdReader) []byte {
 		})
 	}
 	return nil
+}
+
+// onUserDataQuery: 29/11, a paged query over a context "(ctx, u32 offset, u32
+// limit, u16[] fields, bool)". The game calls it six times at character select.
+// We return a page of stored data for the currently-online players in that
+// context (we key user data by nickname, so only players we can name resolve).
+// The reply row layout is not captured, so the typed rows are gated behind
+// D3_FRAMED_REPLIES; the paging and lookup are always exercised.
+func (l *lobbyConn) onUserDataQuery(task byte, ctx string, r *bdReader) []byte {
+	offset, _ := r.u32()
+	limit, err := r.u32()
+	if err != nil || limit == 0 || limit > 100 {
+		limit = 100
+	}
+	type hit struct {
+		id   uint64
+		data []byte
+	}
+	var hits []hit
+	for _, pid := range onlinePIDs() {
+		name := nicknameOnline(pid)
+		if name == "" {
+			continue
+		}
+		if d, ok := userData.get(strings.ToLower(name) + "|" + ctx); ok {
+			hits = append(hits, hit{pid, d})
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].id < hits[j].id })
+	if int(offset) < len(hits) {
+		hits = hits[offset:]
+	} else {
+		hits = nil
+	}
+	if len(hits) > int(limit) {
+		hits = hits[:limit]
+	}
+	l.logf("userdata QUERY ctx=%q offset=%d limit=%d -> %d", ctx, offset, limit, len(hits))
+	if !framedReplies {
+		return taskReply(task, 0, nil)
+	}
+	return taskReply(task, 0, func(w *bdWriter) uint32 {
+		for _, h := range hits {
+			w.u64(h.id)
+			w.blobv(h.data)
+		}
+		return uint32(len(hits))
+	})
 }
 
 // pidOnline returns the Nextendo PID of a connected player identified by id (PID or

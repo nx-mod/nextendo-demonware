@@ -6,26 +6,39 @@ What this server does today, what a complete Diablo III server would also do, an
 
 Auth and tickets; the encrypted lobby; NAT discovery and introductions; public-game matchmaking (create, update, delete, find, player counts); friend name lookups and per-player user data; server time; the publisher files (`Config.txt`, `Seasons.txt`, `Blacklist.txt`); optional weekly Challenge Rifts; presence reporting to nextendo-account. Of the roughly 30 remote-task call sites in the game binary, 10 are answered for real: 12/6, 12/9, 10/21, 21/1, 21/2, 21/3, 21/5, 21/12, 29/1 and 29/4 (binary, code).
 
-## Missing: remote tasks answered with an empty success
+## Framed on the `testing` branch: state kept, replies gated
 
-The game calls these, and the server accepts each one and returns nothing (code, binary). Service names are guesses except 10, 12 and 21.
+These services previously took an empty success and dropped everything. The
+`testing` branch now keeps their state and frames a reply. The state-keeping is
+real and persisted; the typed **reply** for the tasks whose wire layout is not
+captured from the Switch client is behind `D3_FRAMED_REPLIES=1` (off by default,
+because an unrecognised reply shape can mark a service unavailable, while an
+empty success is known-safe). Service names for 10, 12, 21 are confirmed; the
+rest follow the bd SDK generation and the official API's board set.
 
-| service (guess) | tasks | seen live | what a full server would do |
+| service | tasks | state kept now | reply status |
 |---|---|---|---|
-| 4 stats / leaderboards | 1, 4, 5, 11, 13 | 4/1 | store scores, return leaderboards (guess) |
-| 6 messaging | 14 | no | in-game mail; the season-swap mailbox flow needs it (guess) |
-| 10 storage | 10, 12, 13, -1 | 10/10 | keep uploaded hero data (about 2.5 KB) and return it |
-| 23 counter | 1 | 23/1 | shared counters |
-| 27 DML | 2 | 27/2 | `getUserData` |
-| 29 user data | 5, 8, 11 | 29/11 | the rest of the user-data set (29/1 and 29/4 work) |
-| 67 event log | 6 | no | telemetry sink |
-| 68 rich presence | 3, 5, 7 | 68/3 | now implemented (`richpresence.go`) from the layout in the CTR pull request and our own log; unconfirmed in a live game |
+| 4 stats / leaderboards (`leaderboards.go`) | 1, 4, 5, 11, 13 | scores stored per board, best-kept; boards shaped after Blizzard's own D3 Game Data API and served on `/api/leaderboards` | submit parsed best-effort; read replies gated |
+| 6 messaging (`messaging.go`) | 14 | persisted per-player mailbox (send/list/delete) for the season-swap flow | list reply gated |
+| 10 storage (`herostorage.go`) | 10, 12, 13 | uploaded hero/"account" blob stored per player+file, persisted | upload is an empty success (correct); read replies gated |
+| 23 counter (`misc_services.go`) | 1 | shared counters incremented and persisted, shown on the dashboard | new-value reply gated |
+| 27 DML (`misc_services.go`) | 2 | server-owned DML blob (empty until configured) | blob reply gated |
+| 29 user data (`friends.go`) | 5, 8, 11 | 29/1 set and 29/4 get now persisted; 29/11 paged query added | query rows gated; 5/8 still empty success |
+| 67 event log (`misc_services.go`) | 6 | payload counted for the dashboard, then discarded (a sink) | empty success (correct) |
+| 68 rich presence (`richpresence.go`) | 3, 5, 7 | implemented from the CTR pull request and our log | unconfirmed in a live game |
 
-Effect in game: leaderboards show but are empty, hero uploads go nowhere, mail is unavailable (log, code).
+What still needs a live capture to finish: the request layout of the bdStats
+submit task and the row layout each read task's reader expects (services 4, 10,
+6, 23, 29/11). With one capture, turn `D3_FRAMED_REPLIES` on, adjust the row
+writers to match, and the boards, hero downloads and mail become end-to-end.
+
+Effect in game today, `D3_FRAMED_REPLIES` off: as before — leaderboards show but
+are empty — but uploaded heroes, scores, counters and mail are now **stored** and
+visible on the dashboard, so nothing is lost while the capture is pending.
 
 ## Missing: state and identity
 
-- **Nothing persists.** Matchmaking sessions and per-player user data live in memory and are lost on restart; only login tickets and identity files are written to disk (code).
+- **Persistence (`store.go`, `testing` branch).** User data, hero uploads, counters, mail and leaderboards are now kept on disk (one JSON file each under `D3_STATE`, default `state/`, atomic writes, in-memory when `D3_STATE=off`), so they survive a restart. Matchmaking sessions are still in memory by design (a game outlives the server process only if its host reconnects); login tickets and identity files are written by auth as before.
 - **No stable user IDs.** Every ticket carries user id 1, and the lobby connection id is a counter (code). Stable per-account IDs are still open in the notes.
 - **No real subscription check.** `nso_subscription_status` is always `1` (code).
 

@@ -47,6 +47,14 @@ var (
 	// D3_VERBOSE=1 logs every decrypted lobby message as a hex dump.
 	verbose = os.Getenv("D3_VERBOSE") == "1"
 
+	// D3_FRAMED_REPLIES=1 turns on the best-effort typed replies for the
+	// services whose wire layout is not captured from the Switch client yet
+	// (bdStats leaderboards, bdStorage file reads, bdCounter). Off by default:
+	// storing state and answering an empty success is known-safe, while an
+	// unrecognised reply shape can mark a service unavailable in the client.
+	// Turn it on with a capture running to confirm the layouts (see STATUS.md).
+	framedReplies = os.Getenv("D3_FRAMED_REPLIES") == "1"
+
 	runStamp = time.Now().Format("20060102-150405")
 )
 

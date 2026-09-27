@@ -15,11 +15,13 @@ nextendo_secret.key
 *.key
 *.pfx
 *.der
-# Runtime state: tickets, generated publisher files, raw captures
+# Runtime state: tickets, generated publisher files, raw captures,
+# persisted service state (user data, hero files, counters, mail, leaderboards)
 sessions/
 pubfiles/
 dumps/
 capture/
+state/
 # Runtime logs
 stderr.txt
 stdout.txt

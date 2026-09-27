@@ -20,10 +20,28 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// writeJSON encodes v as an HTTP JSON response.
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// currentSeason returns the season number being served right now (after
+// rotation), for the leaderboard index; 0 if the publisher config is unreadable.
+func currentSeason() int {
+	cfg, err := loadPubConfig(pubConfigPath)
+	if err != nil {
+		return 0
+	}
+	return int(effectiveConfig(cfg, time.Now()).Season)
+}
 
 var (
 	dashStart = time.Now()
@@ -107,8 +125,13 @@ var serviceNames = map[byte]string{
 }
 
 var taskNames = map[[2]byte]string{
-	{10, 10}: "uploadFile", {10, 21}: "getPublisherFile",
+	{4, 1}: "writeRow", {4, 4}: "flush", {4, 5}: "getRows", {4, 11}: "getSelf", {4, 13}: "getByAccount",
+	{6, 14}:  "message",
+	{10, 10}: "uploadFile", {10, 12}: "getFile", {10, 13}: "getFiles", {10, 21}: "getPublisherFile",
 	{12, 6}: "getServerTime", {12, 9}: "getUserNames",
+	{23, 1}: "incrementCounters",
+	{27, 2}: "getUserData",
+	{67, 6}: "recordEvents",
 	{68, 3}: "setRichPresence", {68, 4}: "getRichPresence", {68, 5}: "getAndSubscribeRichPresence", {68, 7}: "unsubscribeRichPresence",
 	{21, 1}: "createSession", {21, 2}: "updateSession", {21, 3}: "deleteSession",
 	{21, 5}: "findSessions", {21, 12}: "updateSessionPlayers",
@@ -185,21 +208,26 @@ type apiServer struct {
 }
 
 type apiStats struct {
-	ServerTime     string         `json:"serverTime"`
-	UptimeSeconds  int            `json:"uptimeSeconds"`
-	Connected      int            `json:"connected"`
-	InLobby        int            `json:"inLobby"`
-	ActiveLobbies  int            `json:"activeLobbies"`
-	TotalSessions  int64          `json:"totalSessions"`
-	TotalRMC       int64          `json:"totalRmc"`
-	GatheringsMade int64          `json:"gatheringsMade"`
-	PeakConnected  int            `json:"peakConnected"`
-	NATIntros      int64          `json:"natIntroductions"`
-	Server         apiServer      `json:"server"`
-	Players        []apiPlayer    `json:"players"`
-	Gatherings     []apiGathering `json:"gatherings"`
-	Events         []apiEvent     `json:"events"`
-	Methods        []apiMethod    `json:"methods"`
+	ServerTime     string           `json:"serverTime"`
+	UptimeSeconds  int              `json:"uptimeSeconds"`
+	Connected      int              `json:"connected"`
+	InLobby        int              `json:"inLobby"`
+	ActiveLobbies  int              `json:"activeLobbies"`
+	TotalSessions  int64            `json:"totalSessions"`
+	TotalRMC       int64            `json:"totalRmc"`
+	GatheringsMade int64            `json:"gatheringsMade"`
+	PeakConnected  int              `json:"peakConnected"`
+	NATIntros      int64            `json:"natIntroductions"`
+	Leaderboards   int              `json:"leaderboards"`
+	HeroFiles      int              `json:"heroFiles"`
+	MailboxCount   int              `json:"mailboxes"`
+	EventLog       int64            `json:"eventLogAccepted"`
+	Counters       map[string]int64 `json:"counters,omitempty"`
+	Server         apiServer        `json:"server"`
+	Players        []apiPlayer      `json:"players"`
+	Gatherings     []apiGathering   `json:"gatherings"`
+	Events         []apiEvent       `json:"events"`
+	Methods        []apiMethod      `json:"methods"`
 }
 
 func buildStats() apiStats {
@@ -300,6 +328,11 @@ func buildStats() apiStats {
 		GatheringsMade: gatheringsMade.Load(),
 		PeakConnected:  peakConnected,
 		NATIntros:      natIntros.Load(),
+		Leaderboards:   leaderboards.len(),
+		HeroFiles:      heroFiles.len(),
+		MailboxCount:   mailboxes.len(),
+		EventLog:       eventLogTotal.Load(),
+		Counters:       counterTotals(),
 		Server: apiServer{
 			NexVersion: "Demonware lobby 220", AuthPort: fmt.Sprint(authPort), SecurePort: natPort,
 			SNIHost: envOr("NEXTENDO_SNI_HOST", ""), SessionKey: 24, Stack: "demonware",
@@ -334,6 +367,23 @@ func startDashboard() {
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, "ok") })
 	mux.HandleFunc("/pubfiles/", pubfilesHandler)
+	mux.HandleFunc("/api/leaderboards", func(w http.ResponseWriter, r *http.Request) {
+		if !authed(w, r) {
+			return
+		}
+		writeJSON(w, buildSeasonIndex(currentSeason()))
+	})
+	mux.HandleFunc("/api/leaderboards/", func(w http.ResponseWriter, r *http.Request) {
+		if !authed(w, r) {
+			return
+		}
+		board := strings.TrimPrefix(r.URL.Path, "/api/leaderboards/")
+		if board == "" {
+			writeJSON(w, buildSeasonIndex(currentSeason()))
+			return
+		}
+		writeJSON(w, buildLeaderboardDoc(board))
+	})
 
 	log.Printf("[D3 Dashboard] stats API on :%s (token=%v)", port, token != "")
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

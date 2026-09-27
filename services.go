@@ -285,7 +285,25 @@ func (l *lobbyConn) onTask(payload []byte) {
 	case service == svcTitleUtilities && task == 9:
 		reply = l.onGetUserNames(task, r)
 
-	case service == 29 && (task == 1 || task == 4):
+	case service == svcStorage && (task == storageUploadFile || task == storageGetFile || task == storageGetFiles):
+		reply = l.onStorage(task, r)
+
+	case service == svcStats:
+		reply = l.onStats(task, r)
+
+	case service == svcCounter:
+		reply = l.onCounter(task, r)
+
+	case service == svcDML:
+		reply = l.onDML(task, r)
+
+	case service == svcEventLog:
+		reply = l.onEventLog(task, r)
+
+	case service == svcMessaging:
+		reply = l.onMessaging(task, r)
+
+	case service == 29 && (task == 1 || task == 4 || task == 11):
 		if reply = l.onUserData(task, r); reply == nil {
 			reply = taskReply(task, 0, nil)
 		}

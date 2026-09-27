@@ -197,16 +197,27 @@ Call-site map in `d3hack/capture/nso/taskmap.txt`:
 
 | service | tasks seen in binary | identified | handled |
 |---|---|---|---|
-| 4 (stats/leaderboards?) | 1, 4, 5, 11, 13 | 11 called 6× at char select | empty ok |
-| 6 (messaging?) | 14 | | |
-| 10 bdStorage | 10, 12, 13, 21 | 21 = getPublisherFile(ctx, name); 10 = upload user file ("account" save, 2.5 KB protobuf) | 21 ✔, 10 empty ok |
+| 4 (stats/leaderboards?) | 1, 4, 5, 11, 13 | 11 called 6× at char select | framed: scores stored + Blizzard-API model + dashboard `/api/leaderboards`; typed replies gated `D3_FRAMED_REPLIES` (`leaderboards.go`) |
+| 6 (messaging?) | 14 | | framed: persisted mailbox, list reply gated (`messaging.go`) |
+| 10 bdStorage | 10, 12, 13, 21 | 21 = getPublisherFile(ctx, name); 10 = upload user file ("account" save, 2.5 KB protobuf) | 21 ✔; 10 stores blob (empty-success reply, correct); 12/13 read gated (`herostorage.go`) |
 | 12 bdTitleUtilities | 6, 9 | 6 = getServerTime → u32 | 6 ✔, 9 empty ok |
 | 21 bdMatchMaking? | 1, 2, 3, 5, 12 | never called yet (online game creation) | |
-| 23 bdCounter? | 1 | (u32 counter, i64 delta) | empty ok |
-| 27 bdDML? | 2 | getUserData, no args | empty ok |
-| 29 ? | 1, 4, 5, 8, 11 | 11 = (ctx str, u32 offset, u32 limit, u16[], bool) paged query | empty ok |
-| 67 | 6 | | |
-| 68 | 3, 5, 7 | | |
+| 23 bdCounter? | 1 | (u32 counter, i64 delta) | framed: counters persisted; new-value reply gated (`misc_services.go`) |
+| 27 bdDML? | 2 | getUserData, no args | framed: server-owned blob, reply gated (`misc_services.go`) |
+| 29 ? | 1, 4, 5, 8, 11 | 11 = (ctx str, u32 offset, u32 limit, u16[], bool) paged query | 1/4 persisted ✔; 11 paged query framed (rows gated); 5/8 empty ok (`friends.go`) |
+| 67 | 6 | | framed: sink, counted for dashboard, discarded (`misc_services.go`) |
+| 68 | 3, 5, 7 | rich presence | ✔ (`richpresence.go`, CTR PR) |
+
+**Persistence (`store.go`).** User data, hero uploads, counters, mail and
+leaderboards are kept on disk as one JSON file each under `D3_STATE` (default
+`state/`), atomic write via temp+rename, in-memory when `D3_STATE=off`. A disk
+error degrades to memory and never drops the lobby.
+
+**`D3_FRAMED_REPLIES`.** The tasks above whose wire layout is not captured store
+their state unconditionally but only emit a typed reply when this is set. Off by
+default because an unrecognised reply can mark a service unavailable in the
+client; an empty success is the known-safe answer. The remaining work is one
+live capture of services 4/10/6/23/29-11 to confirm the request and row layouts.
 
 **Publisher files** requested on connect: `Config.txt`, `Seasons.txt`,
 `Blacklist.txt`, `update-1.cpk` (absent ok). The Challenge Rift files
