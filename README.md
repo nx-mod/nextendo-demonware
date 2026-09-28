@@ -1,5 +1,7 @@
 # nextendo-diablo-3-nx
 
+*(still in alpha testing)*
+
 **Written from scratch by nx-mod:** the Demonware server for **Diablo III** (Nintendo Switch) on the Nextendo
 Network. Part of [nextendo-testing](https://github.com/nx-mod/nextendo-testing): the whole network, run on a LAN.
 
