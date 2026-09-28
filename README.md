@@ -1,4 +1,4 @@
-# nextendo-demonware-nx
+# nextendo-diablo-3-nx
 
 **Written from scratch by nx-mod:** the Demonware server for **Diablo III** (Nintendo Switch) on the Nextendo
 Network. Part of [nextendo-testing](https://github.com/nx-mod/nextendo-testing): the whole network, run on a LAN.
@@ -13,8 +13,18 @@ route, nextendo-account's gates and presence, `/api/stats` for the dashboard.
   ([PUBFILES.md](PUBFILES.md), [SEASONS.md](SEASONS.md)); season 37 tested on builds 2.7.6 and 2.7.7.
 - Public games: create, find, join, player counts, NAT introductions; co-op between a Switch and an emulator.
 - Friend lookups and presence reported to nextendo-account (lightly tested).
-- `testing`: leaderboards, hero uploads, counters and mail stored under `D3_STATE`; stale and full games
-  skipped by matchmaking; `NEXTENDO_REQUIRE_TICKET=1` refuses ticketless logins.
+
+## New features (testing)
+
+Added but not yet tried on a running game:
+
+- Leaderboards and stats stored per board, shaped after Blizzard's Diablo III API, served on `/api/leaderboards`
+  (typed replies behind `D3_FRAMED_REPLIES=1`) (testing).
+- Hero uploads, counters and mail stored; everything persisted under `D3_STATE` across restarts (testing).
+- Matchmaking: abandoned games expire (`D3_SESSION_TTL`), full games hidden from search (testing).
+- `NEXTENDO_REQUIRE_TICKET=1` refuses ticketless logins (testing).
+- Console friends' rich presence resolved to Nextendo PIDs (testing).
+- Monthly season rotation and weekly Challenge Rifts (testing).
 
 ## Run
 
