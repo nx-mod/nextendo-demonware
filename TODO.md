@@ -1,7 +1,8 @@
 # TODO — nextendo-diablo-3-nx
 
 - **Features marked (testing)** in the README: try each on a console.
-- **Diablo III News**: a Diablo III channel from bcat-nx (per-game News channels).
+- **Diablo III News**: the channel exists in bcat-nx (`stack/news/channels.json`, `nx_news_diablo3`); confirm on a
+  console and write real items.
 - **Diablo III BCAT data** (`nx_data_01001b300b9be000`): what the game fetches, served by bcat-nx.
 
 ## Credits
